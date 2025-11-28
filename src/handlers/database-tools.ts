@@ -7,7 +7,7 @@ import { ErrorCode, McpError } from "../types/errors.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 export class DatabaseToolHandlers {
-  constructor(private client: MetabaseClient) {}
+  constructor(private client: MetabaseClient) { }
 
   getToolSchemas(): Tool[] {
     return [
@@ -219,7 +219,7 @@ export class DatabaseToolHandlers {
 
     const schema = await this.client.apiCall(
       "GET",
-      `/api/database/${database_id}/schema`
+      `/api/database/${database_id}/metadata`
     );
     return {
       content: [
@@ -240,7 +240,7 @@ export class DatabaseToolHandlers {
 
     const tables = await this.client.apiCall(
       "GET",
-      `/api/database/${database_id}/tables`
+      `/api/table?db_id=${database_id}`
     );
     return {
       content: [
