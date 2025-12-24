@@ -5,7 +5,7 @@
 
 A comprehensive **Model Context Protocol (MCP) server for Metabase integration**, designed for enterprises and developers who want to supercharge their AI assistants with live analytics and business intelligence.
 
-**Developed and maintained by [EaseCloud Technologies](https://easecloud.io)** — your trusted partner for **cloud-native, AI-driven, and data infrastructure solutions.**
+**Developed and maintained by [EaseCloud](https://easecloud.io)** — your trusted partner for **cloud-native, AI-driven, and data infrastructure solutions.**
 
 This is a TypeScript-based MCP server that implements full integration with Metabase API. It allows AI assistants to interact with Metabase, providing comprehensive access to:
 
@@ -414,7 +414,7 @@ After configuring the environment variables as described in the "Configuration" 
   2.  Attempt to start the server.
   3.  The server should fail to start and log an error message stating that authentication credentials (either API key or username/password) are required (e.g., "Either (METABASE_URL and METABASE_API_KEY) or (METABASE_URL, METABASE_USERNAME, and METABASE_PASSWORD) environment variables are required").
 
-## About EaseCloud Technologies
+## About EaseCloud
 
 EaseCloud is a cloud consulting and solutions company specializing in:
 - Cloud-native application development
