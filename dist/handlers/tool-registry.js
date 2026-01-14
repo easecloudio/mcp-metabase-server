@@ -64,6 +64,7 @@ export class ToolRegistry {
         return (name.startsWith("card") ||
             [
                 "list_cards",
+                "get_card",
                 "create_card",
                 "update_card",
                 "delete_card",
