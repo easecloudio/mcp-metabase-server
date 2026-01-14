@@ -6,6 +6,63 @@ import { MetabaseClient } from "../client/metabase-client.js";
 import { ErrorCode, McpError } from "../types/errors.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 
+// Default attributes to return when listing cards (excludes heavy fields like result_metadata)
+const DEFAULT_CARD_ATTRIBUTES = [
+  "id",
+  "name",
+  "description",
+  "collection_id",
+  "display",
+  "type",
+  "query_type",
+  "database_id",
+  "archived",
+  "created_at",
+  "updated_at",
+] as const;
+
+// All available card attributes
+const ALL_CARD_ATTRIBUTES = [
+  "id",
+  "name",
+  "description",
+  "collection_id",
+  "collection",
+  "archived",
+  "archived_directly",
+  "dataset_query",
+  "display",
+  "visualization_settings",
+  "type",
+  "query_type",
+  "database_id",
+  "table_id",
+  "creator_id",
+  "creator",
+  "created_at",
+  "updated_at",
+  "last_used_at",
+  "view_count",
+  "cache_invalidated_at",
+  "cache_ttl",
+  "collection_position",
+  "source_card_id",
+  "result_metadata",
+  "initially_published_at",
+  "card_schema",
+  "enable_embedding",
+  "made_public_by_id",
+  "embedding_params",
+  "entity_id",
+  "collection_preview",
+  "last-edit-info",
+  "metabase_version",
+  "parameters",
+  "parameter_mappings",
+  "dashboard_id",
+  "public_uuid",
+] as const;
+
 export class CardToolHandlers {
   constructor(private client: MetabaseClient) {}
 
@@ -16,7 +73,30 @@ export class CardToolHandlers {
         description: "List all questions/cards in Metabase",
         inputSchema: {
           type: "object",
-          properties: {},
+          properties: {
+            attributes: {
+              type: "array",
+              description: `Optional list of attributes to return for each card. If omitted, returns default attributes: ${DEFAULT_CARD_ATTRIBUTES.join(", ")}. Excludes heavy fields like result_metadata, visualization_settings, dataset_query, creator, collection, and last-edit-info by default.`,
+              items: {
+                type: "string",
+                enum: ALL_CARD_ATTRIBUTES as unknown as string[],
+              },
+            },
+          },
+        },
+      },
+      {
+        name: "get_card",
+        description: "Get a single Metabase question/card by ID with full details including the SQL query (dataset_query). Returns MBQL 5 by default.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: {
+              type: "number",
+              description: "ID of the card to retrieve",
+            },
+          },
+          required: ["card_id"],
         },
       },
       {
@@ -130,7 +210,10 @@ export class CardToolHandlers {
   async handleTool(name: string, args: any): Promise<any> {
     switch (name) {
       case "list_cards":
-        return await this.listCards();
+        return await this.listCards(args);
+
+      case "get_card":
+        return await this.getCard(args);
 
       case "create_card":
         return await this.createCard(args);
@@ -152,13 +235,44 @@ export class CardToolHandlers {
     }
   }
 
-  private async listCards(): Promise<any> {
+  private async listCards(args?: any): Promise<any> {
     const cards = await this.client.getCards();
+    const attributes = args?.attributes || DEFAULT_CARD_ATTRIBUTES;
+
+    // Project only requested attributes
+    const filteredCards = cards.map((card: any) => {
+      const filtered: any = {};
+      for (const attr of attributes) {
+        if (attr in card) {
+          filtered[attr] = card[attr];
+        }
+      }
+      return filtered;
+    });
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(cards, null, 2),
+          text: JSON.stringify(filteredCards, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getCard(args: any): Promise<any> {
+    const { card_id } = args;
+
+    if (!card_id) {
+      throw new McpError(ErrorCode.InvalidParams, "Card ID is required");
+    }
+
+    const card = await this.client.getCard(card_id);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(card, null, 2),
         },
       ],
     };
