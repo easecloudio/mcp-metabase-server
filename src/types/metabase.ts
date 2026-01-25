@@ -99,3 +99,9 @@ export interface QueryResult {
   row_count?: number;
   running_time?: number;
 }
+
+export interface MetabaseQueryParameter {
+  type: string;
+  target: ["variable", ["template-tag", string]];
+  value: string | number | boolean | string[];
+}

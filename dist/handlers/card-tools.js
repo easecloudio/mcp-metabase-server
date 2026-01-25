@@ -114,7 +114,8 @@ export class CardToolHandlers {
                         },
                         parameters: {
                             type: "object",
-                            description: "Optional parameters for the query",
+                            description: 'Optional parameters for the query. Pass as key-value pairs where keys match template tag names (e.g., { "date_filter": "2025-01-01" })',
+                            additionalProperties: true,
                         },
                     },
                     required: ["card_id"],
