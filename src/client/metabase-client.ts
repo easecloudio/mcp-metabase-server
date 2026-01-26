@@ -16,6 +16,7 @@ import {
   Field,
   PermissionGroup,
   QueryResult,
+  MetabaseQueryParameter,
 } from "../types/metabase.js";
 
 export class MetabaseClient {
@@ -191,11 +192,46 @@ export class MetabaseClient {
     }
   }
 
+  /**
+   * Transform user-friendly key-value parameters into Metabase's array format
+   */
+  private transformParameters(
+    params: Record<string, any>
+  ): MetabaseQueryParameter[] {
+    if (!params || Object.keys(params).length === 0) {
+      return [];
+    }
+    if (Array.isArray(params)) {
+      return params; // Already in correct format
+    }
+    return Object.entries(params).map(([key, value]) => ({
+      type: "category",
+      target: ["variable", ["template-tag", key]] as [
+        "variable",
+        ["template-tag", string],
+      ],
+      value: value,
+    }));
+  }
+
   async executeCard(id: number, parameters: any = {}): Promise<QueryResult> {
     await this.ensureAuthenticated();
-    const response = await this.axiosInstance.post(`/api/card/${id}/query`, {
-      parameters,
-    });
+
+    const transformedParams = this.transformParameters(parameters);
+    const body =
+      transformedParams.length > 0
+        ? `parameters=${encodeURIComponent(JSON.stringify(transformedParams))}`
+        : "";
+
+    const response = await this.axiosInstance.post(
+      `/api/card/${id}/query`,
+      body,
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
     return response.data;
   }
 
