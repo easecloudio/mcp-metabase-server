@@ -248,7 +248,7 @@ export class CardToolHandlers {
   }
 
   private async executeCard(args: any): Promise<any> {
-    const { card_id, parameters = {} } = args;
+    const { card_id, parameters = [] } = args;
 
     if (!card_id) {
       throw new McpError(ErrorCode.InvalidParams, "Card ID is required");
