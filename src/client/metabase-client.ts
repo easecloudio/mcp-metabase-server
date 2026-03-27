@@ -191,11 +191,11 @@ export class MetabaseClient {
     }
   }
 
-  async executeCard(id: number, parameters: any = {}): Promise<QueryResult> {
+  async executeCard(id: number, parameters: any = []): Promise<QueryResult> {
     await this.ensureAuthenticated();
     const response = await this.axiosInstance.post(`/api/card/${id}/query`, {
-      parameters,
-    });
+    parameters: Array.isArray(parameters) ? parameters : [],
+  });
     return response.data;
   }
 
