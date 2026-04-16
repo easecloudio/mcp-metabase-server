@@ -420,7 +420,7 @@ export class DashboardToolHandlers {
         result = await this.client.apiCall(
           "PUT",
           `/api/dashboard/${dashboard_id}/cards`,
-          { cards: updatedCards }
+          { dashcards: updatedCards, tabs: dashboard.tabs || [] }
         );
       } catch (putError) {
         // Approach 3: Try alternative endpoint structure
@@ -478,14 +478,14 @@ export class DashboardToolHandlers {
       } catch (altError) {
         // Approach 3: Update dashboard without the card
         const dashboard = await this.client.getDashboard(dashboard_id);
-        const updatedCards = (dashboard.cards || []).filter(
+        const updatedCards = (dashboard.dashcards || []).filter(
           (card: any) => card.id !== dashcard_id
         );
-        
+
         await this.client.apiCall(
           "PUT",
           `/api/dashboard/${dashboard_id}/cards`,
-          { cards: updatedCards }
+          { dashcards: updatedCards, tabs: dashboard.tabs || [] }
         );
       }
     }
@@ -537,17 +537,17 @@ export class DashboardToolHandlers {
       } catch (altError) {
         // Approach 3: Update entire dashboard cards array
         const dashboard = await this.client.getDashboard(dashboard_id);
-        const updatedCards = (dashboard.cards || []).map((card: any) => {
+        const updatedCards = (dashboard.dashcards || []).map((card: any) => {
           if (card.id === dashcard_id) {
             return { ...card, ...updateFields };
           }
           return card;
         });
-        
+
         result = await this.client.apiCall(
           "PUT",
           `/api/dashboard/${dashboard_id}/cards`,
-          { cards: updatedCards }
+          { dashcards: updatedCards, tabs: dashboard.tabs || [] }
         );
       }
     }
