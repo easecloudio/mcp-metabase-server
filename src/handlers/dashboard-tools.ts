@@ -218,6 +218,38 @@ export class DashboardToolHandlers {
     ];
   }
 
+  /**
+   * Project an existing dashcard to the minimal schema the
+   * `PUT /api/dashboard/:id/cards` endpoint accepts.
+   *
+   * GET responses include many derived fields (nested `card`, timestamps,
+   * `inline_parameters`, etc.) that the PUT handler rejects as "Invalid
+   * Request." Passing them through triggers a generic 400 with no body,
+   * which in previous versions of this code silently fell through and
+   * wiped the dashboard via the `cards: nil` cascade.
+   */
+  private toDashcardPayload(card: any, overrides: Record<string, any> = {}): any {
+    const merged = { ...card, ...overrides };
+    const out: any = {
+      id: merged.id,
+      card_id: merged.card_id ?? null,
+      row: merged.row,
+      col: merged.col,
+      size_x: merged.size_x,
+      size_y: merged.size_y,
+      parameter_mappings: merged.parameter_mappings ?? [],
+      visualization_settings: merged.visualization_settings ?? {},
+      series: Array.isArray(merged.series)
+        ? merged.series.map((s: any) => (typeof s === "number" ? s : s?.id))
+            .filter((v: any) => typeof v === "number")
+        : [],
+    };
+    if (merged.dashboard_tab_id !== undefined && merged.dashboard_tab_id !== null) {
+      out.dashboard_tab_id = merged.dashboard_tab_id;
+    }
+    return out;
+  }
+
   async handleTool(name: string, args: any): Promise<any> {
     switch (name) {
       case "list_dashboards":
@@ -398,13 +430,18 @@ export class DashboardToolHandlers {
         dashcardData
       );
     } catch (error) {
-      // Approach 2: Use PUT to update entire dashboard cards array
+      // Approach 2: Use PUT to update entire dashboard cards array.
+      // Metabase 0.50+ rejects a POST to /cards (404) and only accepts the
+      // PUT /cards bulk endpoint with body `{cards: [...], tabs: [...]}`.
+      // New cards are signalled with a negative id.
       try {
         const dashboard = await this.client.getDashboard(dashboard_id);
-        
-        // Create new card object for the dashboard
-        const newCard = {
-          id: -1, // Temporary ID for new cards
+
+        const existing = (dashboard.dashcards || []).map((c: any) =>
+          this.toDashcardPayload(c)
+        );
+        const newCard = this.toDashcardPayload({
+          id: -1,
           card_id,
           row,
           col,
@@ -412,18 +449,15 @@ export class DashboardToolHandlers {
           size_y,
           parameter_mappings,
           visualization_settings,
-        };
-
-        // Add the new card to existing cards
-        const updatedCards = [...(dashboard.dashcards || []), newCard];
+        });
 
         result = await this.client.apiCall(
           "PUT",
           `/api/dashboard/${dashboard_id}/cards`,
-          { dashcards: updatedCards, tabs: dashboard.tabs || [] }
+          { cards: [...existing, newCard], tabs: dashboard.tabs || [] }
         );
       } catch (putError) {
-        // Approach 3: Try alternative endpoint structure
+        // Approach 3: Try alternative endpoint structure (legacy fallback)
         const alternativeData = {
           card_id,
           row,
@@ -476,16 +510,19 @@ export class DashboardToolHandlers {
           `/api/dashboard/${dashboard_id}/dashcard/${dashcard_id}`
         );
       } catch (altError) {
-        // Approach 3: Update dashboard without the card
+        // Approach 3: Update dashboard without the card via the bulk PUT
+        // endpoint. Body key is `cards` (the request schema); GET responses
+        // use `dashcards`. Mixing the two produces a `cards: nil` cascade
+        // that archives every card on the dashboard.
         const dashboard = await this.client.getDashboard(dashboard_id);
-        const updatedCards = (dashboard.dashcards || []).filter(
-          (card: any) => card.id !== dashcard_id
-        );
+        const updatedCards = (dashboard.dashcards || [])
+          .filter((card: any) => card.id !== dashcard_id)
+          .map((c: any) => this.toDashcardPayload(c));
 
         await this.client.apiCall(
           "PUT",
           `/api/dashboard/${dashboard_id}/cards`,
-          { dashcards: updatedCards, tabs: dashboard.tabs || [] }
+          { cards: updatedCards, tabs: dashboard.tabs || [] }
         );
       }
     }
@@ -535,19 +572,21 @@ export class DashboardToolHandlers {
           updateFields
         );
       } catch (altError) {
-        // Approach 3: Update entire dashboard cards array
+        // Approach 3: Update entire dashboard cards array via the bulk PUT
+        // endpoint. Body key is `cards` (request schema); GET returns
+        // `dashcards`. Using `dashcards` in the body leaves `cards` nil and
+        // Metabase archives every card on the dashboard.
         const dashboard = await this.client.getDashboard(dashboard_id);
-        const updatedCards = (dashboard.dashcards || []).map((card: any) => {
-          if (card.id === dashcard_id) {
-            return { ...card, ...updateFields };
-          }
-          return card;
-        });
+        const updatedCards = (dashboard.dashcards || []).map((card: any) =>
+          card.id === dashcard_id
+            ? this.toDashcardPayload(card, updateFields)
+            : this.toDashcardPayload(card)
+        );
 
         result = await this.client.apiCall(
           "PUT",
           `/api/dashboard/${dashboard_id}/cards`,
-          { dashcards: updatedCards, tabs: dashboard.tabs || [] }
+          { cards: updatedCards, tabs: dashboard.tabs || [] }
         );
       }
     }
