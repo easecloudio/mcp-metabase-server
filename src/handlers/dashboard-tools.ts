@@ -69,6 +69,12 @@ export class DashboardToolHandlers {
               type: "boolean",
               description: "Set to true to archive the dashboard",
             },
+            tabs: {
+              type: "array",
+              description:
+                "Dashboard tabs. Array of { id, name, position } objects. For new tabs use negative id (-1, -2, ...). Server assigns real ids on save. When this field is provided, routed via PUT /api/dashboard/:id/cards bulk endpoint to preserve existing cards.",
+              items: { type: "object" },
+            },
           },
           required: ["dashboard_id"],
         },
@@ -150,6 +156,11 @@ export class DashboardToolHandlers {
               type: "object",
               description: "Visualization settings for the card on this dashboard",
             },
+            dashboard_tab_id: {
+              type: "number",
+              description:
+                "ID of the dashboard tab to place this card on. Omit for dashboards without tabs.",
+            },
           },
           required: ["dashboard_id", "card_id"],
         },
@@ -210,6 +221,11 @@ export class DashboardToolHandlers {
             visualization_settings: {
               type: "object",
               description: "Updated visualization settings",
+            },
+            dashboard_tab_id: {
+              type: "number",
+              description:
+                "Move this card to the specified dashboard tab. Omit to leave tab unchanged.",
             },
           },
           required: ["dashboard_id", "dashcard_id"],
@@ -324,23 +340,42 @@ export class DashboardToolHandlers {
   }
 
   private async updateDashboard(args: any): Promise<any> {
-    const { dashboard_id, ...updateFields } = args;
+    const { dashboard_id, tabs, ...updateFields } = args;
 
     if (!dashboard_id) {
       throw new McpError(ErrorCode.InvalidParams, "Dashboard ID is required");
     }
 
-    if (Object.keys(updateFields).length === 0) {
+    if (Object.keys(updateFields).length === 0 && tabs === undefined) {
       throw new McpError(
         ErrorCode.InvalidParams,
         "No fields provided for update"
       );
     }
 
-    const dashboard = await this.client.updateDashboard(
-      dashboard_id,
-      updateFields
-    );
+    let dashboard: any;
+
+    // Metadata fields (name/description/collection_id/parameters/archived)
+    // go through PUT /api/dashboard/:id as usual.
+    if (Object.keys(updateFields).length > 0) {
+      dashboard = await this.client.updateDashboard(dashboard_id, updateFields);
+    }
+
+    // `tabs` is not accepted by PUT /api/dashboard/:id. It must go through
+    // the bulk PUT /api/dashboard/:id/cards endpoint which takes
+    // `{ cards: [...], tabs: [...] }`. Preserve existing cards.
+    if (tabs !== undefined) {
+      const current = await this.client.getDashboard(dashboard_id);
+      const existingCards = (current.dashcards || []).map((c: any) =>
+        this.toDashcardPayload(c)
+      );
+      dashboard = await this.client.apiCall(
+        "PUT",
+        `/api/dashboard/${dashboard_id}/cards`,
+        { cards: existingCards, tabs }
+      );
+    }
+
     return {
       content: [
         {
@@ -400,6 +435,7 @@ export class DashboardToolHandlers {
       size_y = 4,
       parameter_mappings = [],
       visualization_settings = {},
+      dashboard_tab_id,
     } = args;
 
     if (!dashboard_id || !card_id) {
@@ -411,10 +447,10 @@ export class DashboardToolHandlers {
 
     // Try different API approaches based on Metabase version
     let result;
-    
+
     try {
       // Approach 1: Direct POST to dashboard cards (works in some versions)
-      const dashcardData = {
+      const dashcardData: any = {
         cardId: card_id,
         row,
         col,
@@ -423,6 +459,8 @@ export class DashboardToolHandlers {
         parameter_mappings,
         visualization_settings,
       };
+      if (dashboard_tab_id !== undefined)
+        dashcardData.dashboard_tab_id = dashboard_tab_id;
 
       result = await this.client.apiCall(
         "POST",
@@ -449,6 +487,7 @@ export class DashboardToolHandlers {
           size_y,
           parameter_mappings,
           visualization_settings,
+          dashboard_tab_id,
         });
 
         result = await this.client.apiCall(
@@ -458,7 +497,7 @@ export class DashboardToolHandlers {
         );
       } catch (putError) {
         // Approach 3: Try alternative endpoint structure (legacy fallback)
-        const alternativeData = {
+        const alternativeData: any = {
           card_id,
           row,
           col,
@@ -467,6 +506,8 @@ export class DashboardToolHandlers {
           parameter_mappings,
           visualization_settings,
         };
+        if (dashboard_tab_id !== undefined)
+          alternativeData.dashboard_tab_id = dashboard_tab_id;
 
         result = await this.client.apiCall(
           "POST",
