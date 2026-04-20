@@ -1,6 +1,6 @@
 import { MetabaseClient } from "../client/metabase-client.js";
 import { ErrorCode, McpError } from "../types/errors.js";
-import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { TaggedTool } from "../types/tool-metadata.js";
 import {
   DatabaseSchema,
   CachedTable,
@@ -16,7 +16,7 @@ export class SchemaCacheToolHandlers {
     private metabaseUrl: string
   ) {}
 
-  getToolSchemas(): Tool[] {
+  getToolSchemas(): TaggedTool[] {
     return [
       {
         name: "get_schema_cache",
@@ -24,6 +24,7 @@ export class SchemaCacheToolHandlers {
           "Get cached database schema (tables + field IDs) for a Metabase database. " +
           "Auto-fetches from Metabase if cache is missing or older than 24h. " +
           "Use this BEFORE translating SQL to MBQL — field IDs in the response are required for MBQL field references like [\"field\", 42, null].",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["schema-cache"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -40,6 +41,7 @@ export class SchemaCacheToolHandlers {
         description:
           "Force-refresh the local schema cache for one or all databases. " +
           "Use when you suspect the cache is outdated (e.g. after a schema migration).",
+        metadata: { mode: ["write", "all"], tags: ["schema-cache"] },
         inputSchema: {
           type: "object",
           properties: {
