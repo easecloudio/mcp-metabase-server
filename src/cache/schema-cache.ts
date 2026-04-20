@@ -71,9 +71,8 @@ export async function readSchemaCache(
 
     return schema;
   } catch (err: unknown) {
-    // Fix 2: distinguish ENOENT from unexpected errors
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      // unexpected error (permission denied, malformed JSON, etc.) — log or handle upstream
+      throw err;
     }
     return null;
   }
