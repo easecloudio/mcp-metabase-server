@@ -346,8 +346,7 @@ export class MetabaseClient {
     const response = await this.axiosInstance.request({
       method,
       url: endpoint,
-      // GET requests use params (query string); mutations use data (request body)
-      ...(method === "GET" ? { params: data } : { data }),
+      data,
     });
     return response.data;
   }
