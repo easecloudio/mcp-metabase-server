@@ -6,6 +6,7 @@ import { MetabaseClient } from "../client/metabase-client.js";
 import { DashboardToolHandlers } from "./dashboard-tools.js";
 import { CardToolHandlers } from "./card-tools.js";
 import { DatabaseToolHandlers } from "./database-tools.js";
+import { TableToolHandlers } from "./table-tools.js";
 import { ErrorCode, McpError } from "../types/errors.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { ToolMode, TaggedTool } from "../types/tool-metadata.js";
@@ -14,6 +15,7 @@ export class ToolRegistry {
   private dashboardHandlers: DashboardToolHandlers;
   private cardHandlers: CardToolHandlers;
   private databaseHandlers: DatabaseToolHandlers;
+  private tableHandlers: TableToolHandlers;
   private toolMode: ToolMode;
   private visibleToolNames: Set<string> | null = null;
 
@@ -21,6 +23,7 @@ export class ToolRegistry {
     this.dashboardHandlers = new DashboardToolHandlers(client);
     this.cardHandlers = new CardToolHandlers(client);
     this.databaseHandlers = new DatabaseToolHandlers(client);
+    this.tableHandlers = new TableToolHandlers(client);
 
     const mode = process.env.TOOL_MODE as ToolMode;
     this.toolMode = (["essential", "read", "write", "all"] as ToolMode[]).includes(mode)
@@ -40,6 +43,7 @@ export class ToolRegistry {
       ...this.dashboardHandlers.getToolSchemas(),
       ...this.cardHandlers.getToolSchemas(),
       ...this.databaseHandlers.getToolSchemas(),
+      ...this.tableHandlers.getToolSchemas(),
       // Add other tool schemas for collections, users, etc.
       ...this.getAdditionalToolSchemas(),
     ] as TaggedTool[];
@@ -84,6 +88,11 @@ export class ToolRegistry {
     // Database tools
     if (this.isDatabaseTool(name)) {
       return await this.databaseHandlers.handleTool(name, args);
+    }
+
+    // Table tools
+    if (this.isTableTool(name)) {
+      return await this.tableHandlers.handleTool(name, args);
     }
 
     // Handle other tools directly
@@ -135,6 +144,14 @@ export class ToolRegistry {
         "get_database_sync_status",
       ].includes(name)
     );
+  }
+
+  private isTableTool(name: string): boolean {
+    return [
+      "list_tables", "get_table", "get_table_metadata", "get_table_fks",
+      "get_field_id", "update_table", "sync_table_schema",
+      "rescan_table_field_values", "discard_table_field_values",
+    ].includes(name);
   }
 
   private getAdditionalToolSchemas(): TaggedTool[] {
