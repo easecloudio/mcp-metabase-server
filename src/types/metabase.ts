@@ -18,6 +18,7 @@ export interface Dashboard {
   parameters?: any[];
   cards?: DashboardCard[];
   dashcards?: DashboardCard[];
+  tabs?: any[];
 }
 
 export interface DashboardCard {
