@@ -8,16 +8,19 @@ import { CardToolHandlers } from "./card-tools.js";
 import { DatabaseToolHandlers } from "./database-tools.js";
 import { ErrorCode, McpError } from "../types/errors.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { SchemaCacheToolHandlers } from "./schema-cache-tools.js";
 
 export class ToolRegistry {
   private dashboardHandlers: DashboardToolHandlers;
   private cardHandlers: CardToolHandlers;
   private databaseHandlers: DatabaseToolHandlers;
+  private schemaCacheHandlers: SchemaCacheToolHandlers;
 
   constructor(private client: MetabaseClient) {
     this.dashboardHandlers = new DashboardToolHandlers(client);
     this.cardHandlers = new CardToolHandlers(client);
     this.databaseHandlers = new DatabaseToolHandlers(client);
+    this.schemaCacheHandlers = new SchemaCacheToolHandlers(client, client.url);
   }
 
   /**
@@ -28,6 +31,7 @@ export class ToolRegistry {
       ...this.dashboardHandlers.getToolSchemas(),
       ...this.cardHandlers.getToolSchemas(),
       ...this.databaseHandlers.getToolSchemas(),
+      ...this.schemaCacheHandlers.getToolSchemas(),
       // Add other tool schemas for collections, users, etc.
       ...this.getAdditionalToolSchemas(),
     ];
@@ -50,6 +54,11 @@ export class ToolRegistry {
     // Database tools
     if (this.isDatabaseTool(name)) {
       return await this.databaseHandlers.handleTool(name, args);
+    }
+
+    // Schema cache tools
+    if (this.isSchemaCacheTool(name)) {
+      return await this.schemaCacheHandlers.handleTool(name, args);
     }
 
     // Handle other tools directly
@@ -97,6 +106,10 @@ export class ToolRegistry {
         "get_database_tables",
       ].includes(name)
     );
+  }
+
+  private isSchemaCacheTool(name: string): boolean {
+    return ["get_schema_cache", "refresh_schema_cache"].includes(name);
   }
 
   private getAdditionalToolSchemas(): Tool[] {
