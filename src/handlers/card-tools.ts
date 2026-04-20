@@ -188,7 +188,14 @@ export class CardToolHandlers {
       },
       {
         name: "execute_card",
-        description: "Execute a Metabase question/card and get results",
+        description:
+          "Execute a Metabase question/card and get results. " +
+          "Parameters can be passed in two ways: " +
+          "(1) Simplified format - an object mapping parameter names to values, e.g. " +
+          '{"site_name": "guangzhou", "module_lv1": "L4"}. The tool will automatically ' +
+          "resolve the correct Metabase parameter format by inspecting the card's template tags. " +
+          "(2) Native Metabase format - an array of parameter objects with type/target/value fields. " +
+          "The simplified format is recommended as it handles text, date, and dimension parameters automatically.",
         inputSchema: {
           type: "object",
           properties: {
@@ -197,8 +204,9 @@ export class CardToolHandlers {
               description: "ID of the card/question to execute",
             },
             parameters: {
-              type: "object",
-              description: "Optional parameters for the query",
+              description:
+                "Query parameters. Either a simplified {name: value} object " +
+                "(recommended) or a native Metabase parameter array.",
             },
           },
           required: ["card_id"],
@@ -362,13 +370,31 @@ export class CardToolHandlers {
   }
 
   private async executeCard(args: any): Promise<any> {
-    const { card_id, parameters = [] } = args;
+    const { card_id, parameters } = args;
 
     if (!card_id) {
       throw new McpError(ErrorCode.InvalidParams, "Card ID is required");
     }
 
-    const result = await this.client.executeCard(card_id, parameters);
+    let resolvedParameters: any[] = [];
+
+    if (parameters !== undefined && parameters !== null) {
+      if (Array.isArray(parameters)) {
+        // Native Metabase format: pass through as-is
+        resolvedParameters = parameters;
+      } else if (
+        typeof parameters === "object" &&
+        Object.keys(parameters).length > 0
+      ) {
+        // Simplified format: resolve by inspecting card template tags
+        resolvedParameters = await this.resolveSimplifiedParameters(
+          card_id,
+          parameters
+        );
+      }
+    }
+
+    const result = await this.client.executeCard(card_id, resolvedParameters);
     return {
       content: [
         {
@@ -377,5 +403,77 @@ export class CardToolHandlers {
         },
       ],
     };
+  }
+
+  /**
+   * Resolve simplified {name: value} parameters to native Metabase format
+   * by inspecting the card's template tags.
+   *
+   * Template tag types and their corresponding parameter formats:
+   * - text: {type: "category", target: ["variable", ["template-tag", name]], value: [value]}
+   * - date: {type: "date/single", target: ["variable", ["template-tag", name]], value: value}
+   * - dimension: {type: "string/=", target: ["dimension", ["template-tag", name]], value: [value]}
+   * - number: {type: "number/=", target: ["variable", ["template-tag", name]], value: [value]}
+   */
+  private async resolveSimplifiedParameters(
+    cardId: number,
+    simplifiedParams: Record<string, any>
+  ): Promise<any[]> {
+    // Fetch card metadata to get template tag definitions
+    const card = await this.client.getCard(cardId);
+    const templateTags =
+      card?.dataset_query?.native?.["template-tags"] ||
+      card?.dataset_query?.native?.template_tags ||
+      {};
+
+    const resolvedParams: any[] = [];
+
+    for (const [name, value] of Object.entries(simplifiedParams)) {
+      const tag = templateTags[name];
+
+      if (!tag) {
+        // Unknown parameter: try as a generic category parameter
+        resolvedParams.push({
+          type: "category",
+          target: ["variable", ["template-tag", name]],
+          value: Array.isArray(value) ? value : [value],
+        });
+        continue;
+      }
+
+      const tagType = tag.type;
+
+      if (tagType === "dimension") {
+        // Dimension parameters link to a specific field
+        resolvedParams.push({
+          type: "string/=",
+          target: ["dimension", ["template-tag", name]],
+          value: Array.isArray(value) ? value : [value],
+        });
+      } else if (tagType === "date") {
+        // Date parameters
+        resolvedParams.push({
+          type: "date/single",
+          target: ["variable", ["template-tag", name]],
+          value: Array.isArray(value) ? value[0] : value,
+        });
+      } else if (tagType === "number") {
+        // Number parameters
+        resolvedParams.push({
+          type: "number/=",
+          target: ["variable", ["template-tag", name]],
+          value: Array.isArray(value) ? value : [value],
+        });
+      } else {
+        // text and other types
+        resolvedParams.push({
+          type: "category",
+          target: ["variable", ["template-tag", name]],
+          value: Array.isArray(value) ? value : [value],
+        });
+      }
+    }
+
+    return resolvedParams;
   }
 }
