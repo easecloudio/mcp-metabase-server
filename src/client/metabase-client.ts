@@ -49,6 +49,10 @@ export class MetabaseClient {
     }
   }
 
+  get url(): string {
+    return this.config.url;
+  }
+
   private logInfo(message: string, data?: unknown) {
     const logMessage = {
       timestamp: new Date().toISOString(),
@@ -209,6 +213,12 @@ export class MetabaseClient {
   async getDatabase(id: number): Promise<Database> {
     await this.ensureAuthenticated();
     const response = await this.axiosInstance.get(`/api/database/${id}`);
+    return response.data;
+  }
+
+  async getDatabaseMetadata(id: number): Promise<any> {
+    await this.ensureAuthenticated();
+    const response = await this.axiosInstance.get(`/api/database/${id}/metadata`);
     return response.data;
   }
 
