@@ -42,6 +42,11 @@ function getCacheFilePath(metabaseUrl: string, databaseId: number): string {
   return path.join(getCacheDir(metabaseUrl), `database_${databaseId}.json`);
 }
 
+// Fix 5: moved above readSchemaCache so it is defined before use
+export function isCacheStale(schema: DatabaseSchema): boolean {
+  return Date.now() - new Date(schema.cached_at).getTime() > TTL_MS;
+}
+
 export async function readSchemaCache(
   metabaseUrl: string,
   databaseId: number
@@ -50,10 +55,26 @@ export async function readSchemaCache(
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     const schema: DatabaseSchema = JSON.parse(raw);
+
+    // Fix 3: minimal shape validation before trusting the payload
+    if (
+      typeof schema.cached_at !== "string" ||
+      typeof schema.database_id !== "number" ||
+      !Array.isArray(schema.tables)
+    ) {
+      return null;
+    }
+
+    // Fix 2: guard against NaN (unparseable date) and delegate to isCacheStale (Fix 5)
     const age = Date.now() - new Date(schema.cached_at).getTime();
-    if (age > TTL_MS) return null;
+    if (isNaN(age) || isCacheStale(schema)) return null;
+
     return schema;
-  } catch {
+  } catch (err: unknown) {
+    // Fix 2: distinguish ENOENT from unexpected errors
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      // unexpected error (permission denied, malformed JSON, etc.) — log or handle upstream
+    }
     return null;
   }
 }
@@ -63,8 +84,13 @@ export async function writeSchemaCache(
   schema: DatabaseSchema
 ): Promise<void> {
   const filePath = getCacheFilePath(metabaseUrl, schema.database_id);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(schema, null, 2), "utf-8");
+  const dir = path.dirname(filePath);
+  await fs.mkdir(dir, { recursive: true });
+
+  // Fix 1: write to a .tmp file first, then atomically rename to the real path
+  const tmpPath = `${filePath}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(schema, null, 2), "utf-8");
+  await fs.rename(tmpPath, filePath);
 }
 
 export async function deleteSchemaCache(
@@ -74,13 +100,12 @@ export async function deleteSchemaCache(
   const filePath = getCacheFilePath(metabaseUrl, databaseId);
   try {
     await fs.unlink(filePath);
-  } catch {
-    // already gone
+  } catch (err: unknown) {
+    // Fix 4: only swallow ENOENT; re-throw anything unexpected
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw err;
+    }
   }
-}
-
-export function isCacheStale(schema: DatabaseSchema): boolean {
-  return Date.now() - new Date(schema.cached_at).getTime() > TTL_MS;
 }
 
 export function getCachePath(metabaseUrl: string): string {
