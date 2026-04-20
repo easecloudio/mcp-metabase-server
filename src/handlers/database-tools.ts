@@ -240,7 +240,7 @@ export class DatabaseToolHandlers {
 
     const tables = await this.client.apiCall(
       "GET",
-      `/api/table?db_id=${database_id}`
+      `/api/database/${database_id}/tables`
     );
     return {
       content: [
