@@ -7,7 +7,6 @@ import {
   CachedField,
   readSchemaCache,
   writeSchemaCache,
-  isCacheStale,
   getCachePath,
 } from "../cache/schema-cache.js";
 
@@ -100,7 +99,7 @@ export class SchemaCacheToolHandlers {
           text: JSON.stringify(
             {
               ...schema,
-              cache_status: isCacheStale(schema) ? "stale_served" : "fresh",
+              cache_status: "fresh",
             },
             null,
             2
