@@ -4,7 +4,7 @@
 
 import { MetabaseClient } from "../client/metabase-client.js";
 import { ErrorCode, McpError } from "../types/errors.js";
-import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { TaggedTool } from "../types/tool-metadata.js";
 
 // Default attributes to return when listing cards (excludes heavy fields like result_metadata)
 const DEFAULT_CARD_ATTRIBUTES = [
@@ -66,11 +66,12 @@ const ALL_CARD_ATTRIBUTES = [
 export class CardToolHandlers {
   constructor(private client: MetabaseClient) {}
 
-  getToolSchemas(): Tool[] {
+  getToolSchemas(): TaggedTool[] {
     return [
       {
         name: "list_cards",
         description: "List all questions/cards in Metabase",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["card"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -88,6 +89,7 @@ export class CardToolHandlers {
       {
         name: "get_card",
         description: "Get a single Metabase question/card by ID with full details including the SQL query (dataset_query). Returns MBQL 5 by default.",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["card"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -102,6 +104,7 @@ export class CardToolHandlers {
       {
         name: "create_card",
         description: "Create a new Metabase question (card)",
+        metadata: { mode: ["write", "all"], tags: ["card"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -139,6 +142,7 @@ export class CardToolHandlers {
       {
         name: "update_card",
         description: "Update an existing Metabase question (card)",
+        metadata: { mode: ["write", "all"], tags: ["card"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -169,6 +173,7 @@ export class CardToolHandlers {
       {
         name: "delete_card",
         description: "Delete a Metabase question (card)",
+        metadata: { mode: ["write", "all"], tags: ["card"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -189,6 +194,7 @@ export class CardToolHandlers {
       {
         name: "execute_card",
         description: "Execute a Metabase question/card and get results",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["card"] },
         inputSchema: {
           type: "object",
           properties: {

@@ -4,16 +4,17 @@
 
 import { MetabaseClient } from "../client/metabase-client.js";
 import { ErrorCode, McpError } from "../types/errors.js";
-import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { TaggedTool } from "../types/tool-metadata.js";
 
 export class DashboardToolHandlers {
   constructor(private client: MetabaseClient) {}
 
-  getToolSchemas(): Tool[] {
+  getToolSchemas(): TaggedTool[] {
     return [
       {
         name: "list_dashboards",
         description: "List all dashboards in Metabase",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {},
@@ -22,6 +23,7 @@ export class DashboardToolHandlers {
       {
         name: "create_dashboard",
         description: "Create a new Metabase dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -47,6 +49,7 @@ export class DashboardToolHandlers {
       {
         name: "update_dashboard",
         description: "Update an existing Metabase dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -82,6 +85,7 @@ export class DashboardToolHandlers {
       {
         name: "delete_dashboard",
         description: "Delete a Metabase dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -102,6 +106,7 @@ export class DashboardToolHandlers {
       {
         name: "get_dashboard_cards",
         description: "Get all cards in a dashboard",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -116,6 +121,7 @@ export class DashboardToolHandlers {
       {
         name: "add_card_to_dashboard",
         description: "Add a card to a dashboard with positioning",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -168,6 +174,7 @@ export class DashboardToolHandlers {
       {
         name: "remove_card_from_dashboard",
         description: "Remove a card from a dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -186,6 +193,7 @@ export class DashboardToolHandlers {
       {
         name: "update_dashboard_card",
         description: "Update card position, size, and settings on a dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
         inputSchema: {
           type: "object",
           properties: {

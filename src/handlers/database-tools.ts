@@ -4,16 +4,17 @@
 
 import { MetabaseClient } from "../client/metabase-client.js";
 import { ErrorCode, McpError } from "../types/errors.js";
-import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { TaggedTool } from "../types/tool-metadata.js";
 
 export class DatabaseToolHandlers {
   constructor(private client: MetabaseClient) { }
 
-  getToolSchemas(): Tool[] {
+  getToolSchemas(): TaggedTool[] {
     return [
       {
         name: "list_databases",
         description: "List all databases in Metabase",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {},
@@ -22,6 +23,7 @@ export class DatabaseToolHandlers {
       {
         name: "execute_query",
         description: "Execute a SQL query against a Metabase database",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -42,6 +44,7 @@ export class DatabaseToolHandlers {
       {
         name: "get_database_schema",
         description: "Get the schema information for a database",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -53,6 +56,7 @@ export class DatabaseToolHandlers {
       {
         name: "get_database_tables",
         description: "Get all tables in a database",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -64,6 +68,7 @@ export class DatabaseToolHandlers {
       {
         name: "create_database_connection",
         description: "Create a new database connection",
+        metadata: { mode: ["write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -97,6 +102,7 @@ export class DatabaseToolHandlers {
       {
         name: "test_database_connection",
         description: "Test a database connection",
+        metadata: { mode: ["read", "write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -114,6 +120,7 @@ export class DatabaseToolHandlers {
       {
         name: "sync_database_schema",
         description: "Sync database schema metadata",
+        metadata: { mode: ["write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {
@@ -128,6 +135,7 @@ export class DatabaseToolHandlers {
       {
         name: "get_database_sync_status",
         description: "Get database schema sync status",
+        metadata: { mode: ["read", "write", "all"], tags: ["database"] },
         inputSchema: {
           type: "object",
           properties: {

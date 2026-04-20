@@ -8,35 +8,69 @@ import { CardToolHandlers } from "./card-tools.js";
 import { DatabaseToolHandlers } from "./database-tools.js";
 import { ErrorCode, McpError } from "../types/errors.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { ToolMode, TaggedTool } from "../types/tool-metadata.js";
 
 export class ToolRegistry {
   private dashboardHandlers: DashboardToolHandlers;
   private cardHandlers: CardToolHandlers;
   private databaseHandlers: DatabaseToolHandlers;
+  private toolMode: ToolMode;
+  private visibleToolNames: Set<string> | null = null;
 
   constructor(private client: MetabaseClient) {
     this.dashboardHandlers = new DashboardToolHandlers(client);
     this.cardHandlers = new CardToolHandlers(client);
     this.databaseHandlers = new DatabaseToolHandlers(client);
+
+    const mode = process.env.TOOL_MODE as ToolMode;
+    this.toolMode = (["essential", "read", "write", "all"] as ToolMode[]).includes(mode)
+      ? mode
+      : "all";
+
+    this.visibleToolNames = this.toolMode === "all"
+      ? null  // null means "all allowed"
+      : new Set(this.getAllToolSchemas().map(t => t.name));
   }
 
   /**
-   * Get all available tool schemas
+   * Get all available tool schemas, filtered by TOOL_MODE
    */
   getAllToolSchemas(): Tool[] {
-    return [
+    const all = [
       ...this.dashboardHandlers.getToolSchemas(),
       ...this.cardHandlers.getToolSchemas(),
       ...this.databaseHandlers.getToolSchemas(),
       // Add other tool schemas for collections, users, etc.
       ...this.getAdditionalToolSchemas(),
-    ];
+    ] as TaggedTool[];
+
+    if (this.toolMode === "all") return all;
+
+    return all.filter(tool => {
+      const meta = tool.metadata;
+      if (!meta) {
+        console.error(JSON.stringify({
+          level: "warn",
+          message: `Tool '${tool.name}' has no metadata and will be hidden in TOOL_MODE '${this.toolMode}'`,
+        }));
+        return false;
+      }
+      return meta.mode.includes(this.toolMode);
+    });
   }
 
   /**
    * Handle a tool call
    */
   async handleTool(name: string, args: any): Promise<any> {
+    // Enforce mode filter — reject tools not visible in current mode
+    if (this.visibleToolNames !== null && !this.visibleToolNames.has(name)) {
+      throw new McpError(
+        ErrorCode.MethodNotFound,
+        `Tool not available in TOOL_MODE '${this.toolMode}': ${name}`
+      );
+    }
+
     // Dashboard tools
     if (this.isDashboardTool(name)) {
       return await this.dashboardHandlers.handleTool(name, args);
@@ -95,11 +129,15 @@ export class ToolRegistry {
         "execute_query",
         "get_database_schema",
         "get_database_tables",
+        "create_database_connection",
+        "test_database_connection",
+        "sync_database_schema",
+        "get_database_sync_status",
       ].includes(name)
     );
   }
 
-  private getAdditionalToolSchemas(): Tool[] {
+  private getAdditionalToolSchemas(): TaggedTool[] {
     return [
       // Collection tools
       {
@@ -115,6 +153,7 @@ export class ToolRegistry {
             },
           },
         },
+        metadata: { mode: ["read", "write", "all"], tags: ["collection"] },
       },
       {
         name: "create_collection",
@@ -135,6 +174,7 @@ export class ToolRegistry {
           },
           required: ["name"],
         },
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
       },
       // User tools
       {
@@ -150,6 +190,7 @@ export class ToolRegistry {
             },
           },
         },
+        metadata: { mode: ["read", "write", "all"], tags: ["user"] },
       },
       {
         name: "create_user",
@@ -169,6 +210,7 @@ export class ToolRegistry {
           },
           required: ["first_name", "last_name", "email"],
         },
+        metadata: { mode: ["write", "all"], tags: ["user"] },
       },
       // Permission tools
       {
@@ -178,6 +220,7 @@ export class ToolRegistry {
           type: "object",
           properties: {},
         },
+        metadata: { mode: ["read", "write", "all"], tags: ["permission"] },
       },
       {
         name: "create_permission_group",
@@ -192,6 +235,7 @@ export class ToolRegistry {
           },
           required: ["name"],
         },
+        metadata: { mode: ["write", "all"], tags: ["permission"] },
       },
       // Search tools
       {
@@ -212,6 +256,7 @@ export class ToolRegistry {
           },
           required: ["query"],
         },
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["search"] },
       },
     ];
   }
