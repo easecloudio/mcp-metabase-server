@@ -111,6 +111,14 @@ export class ToolRegistry {
         "add_card_to_dashboard",
         "remove_card_from_dashboard",
         "update_dashboard_card",
+        "create_dashboard_public_link",
+        "delete_dashboard_public_link",
+        "list_public_dashboards",
+        "list_embeddable_dashboards",
+        "copy_dashboard",
+        "get_dashboard_revisions",
+        "revert_dashboard",
+        "get_dashboard_related",
       ].includes(name)
     );
   }
@@ -125,6 +133,14 @@ export class ToolRegistry {
         "update_card",
         "delete_card",
         "execute_card",
+        "create_card_public_link",
+        "delete_card_public_link",
+        "list_public_cards",
+        "list_embeddable_cards",
+        "export_card_result",
+        "copy_card",
+        "get_card_query_metadata",
+        "get_card_dashboards",
       ].includes(name)
     );
   }
@@ -142,6 +158,10 @@ export class ToolRegistry {
         "test_database_connection",
         "sync_database_schema",
         "get_database_sync_status",
+        "check_database_health",
+        "validate_database",
+        "list_database_schemas",
+        "get_database_metadata",
       ].includes(name)
     );
   }
@@ -192,6 +212,65 @@ export class ToolRegistry {
           required: ["name"],
         },
         metadata: { mode: ["write", "all"], tags: ["collection"] },
+      },
+      {
+        name: "get_collection",
+        description: "Get details of a specific collection",
+        metadata: { mode: ["read", "write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: { type: ["number", "string"], description: "ID of the collection (use 'root' for root collection)" },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "update_collection",
+        description: "Update a collection's name, description, color, or parent",
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: { type: "number", description: "ID of the collection" },
+            name: { type: "string", description: "New name" },
+            description: { type: "string" },
+            color: { type: "string", description: "Hex color e.g. #31698A" },
+            parent_id: { type: "number", description: "New parent collection ID" },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "delete_collection",
+        description: "Delete a collection and all its contents",
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: { type: "number", description: "ID of the collection to delete" },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "get_collection_items",
+        description: "List items (cards, dashboards, sub-collections) inside a collection",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: {
+              type: "number",
+              description: "ID of the collection (omit or use null for root)",
+            },
+            models: {
+              type: "array",
+              description: "Filter by content type",
+              items: { type: "string", enum: ["card", "dashboard", "collection", "dataset"] },
+            },
+          },
+        },
       },
       // User tools
       {
@@ -285,6 +364,14 @@ export class ToolRegistry {
         return await this.handleListCollections(args);
       case "create_collection":
         return await this.handleCreateCollection(args);
+      case "get_collection":
+        return await this.handleGetCollection(args);
+      case "update_collection":
+        return await this.handleUpdateCollection(args);
+      case "delete_collection":
+        return await this.handleDeleteCollection(args);
+      case "get_collection_items":
+        return await this.handleGetCollectionItems(args);
 
       // User operations
       case "list_users":
@@ -435,5 +522,32 @@ export class ToolRegistry {
         },
       ],
     };
+  }
+
+  private async handleGetCollection(args: any): Promise<any> {
+    const { collection_id } = args;
+    const result = await this.client.apiCall("GET", `/api/collection/${collection_id}`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async handleUpdateCollection(args: any): Promise<any> {
+    const { collection_id, ...updates } = args;
+    const result = await this.client.apiCall("PUT", `/api/collection/${collection_id}`, updates);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async handleDeleteCollection(args: any): Promise<any> {
+    const { collection_id } = args;
+    await this.client.apiCall("DELETE", `/api/collection/${collection_id}`);
+    return { content: [{ type: "text", text: `Collection ${collection_id} deleted.` }] };
+  }
+
+  private async handleGetCollectionItems(args: any): Promise<any> {
+    const { collection_id, models } = args;
+    const id = collection_id ?? "root";
+    const params: any = {};
+    if (models?.length) params.models = models.join(",");
+    const result = await this.client.apiCall("GET", `/api/collection/${id}/items`, params);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }

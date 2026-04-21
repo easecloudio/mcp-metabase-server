@@ -210,6 +210,103 @@ export class CardToolHandlers {
           required: ["card_id"],
         },
       },
+      {
+        name: "create_card_public_link",
+        description: "Create a public sharing link for a card/question. Returns the UUID for the public URL.",
+        metadata: { mode: ["write", "all"], tags: ["card", "sharing"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card to share" },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "delete_card_public_link",
+        description: "Remove the public sharing link for a card/question",
+        metadata: { mode: ["write", "all"], tags: ["card", "sharing"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "list_public_cards",
+        description: "List all cards that have public sharing links enabled",
+        metadata: { mode: ["read", "write", "all"], tags: ["card", "sharing"] },
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "list_embeddable_cards",
+        description: "List all cards that are set up for embedding",
+        metadata: { mode: ["read", "write", "all"], tags: ["card", "sharing"] },
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "export_card_result",
+        description: "Export a card's query results in the specified format (csv, json, xlsx)",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card to export" },
+            format: {
+              type: "string",
+              enum: ["csv", "json", "xlsx"],
+              description: "Export format",
+              default: "json",
+            },
+            parameters: {
+              type: "array",
+              description: "Optional query parameters",
+              items: { type: "object" },
+            },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "copy_card",
+        description: "Duplicate an existing card/question",
+        metadata: { mode: ["write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card to copy" },
+            name: { type: "string", description: "Name for the copy (defaults to 'Copy of <original>')" },
+            collection_id: { type: "number", description: "Collection to place the copy in" },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "get_card_query_metadata",
+        description: "Get query metadata for a card including column types and display names",
+        metadata: { mode: ["read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "get_card_dashboards",
+        description: "List all dashboards that contain a specific card",
+        metadata: { mode: ["read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+          },
+          required: ["card_id"],
+        },
+      },
     ];
   }
 
@@ -232,6 +329,23 @@ export class CardToolHandlers {
 
       case "execute_card":
         return await this.executeCard(args);
+
+      case "create_card_public_link":
+        return await this.createPublicLink(args);
+      case "delete_card_public_link":
+        return await this.deletePublicLink(args);
+      case "list_public_cards":
+        return await this.listPublicCards();
+      case "list_embeddable_cards":
+        return await this.listEmbeddableCards();
+      case "export_card_result":
+        return await this.exportCardResult(args);
+      case "copy_card":
+        return await this.copyCard(args);
+      case "get_card_query_metadata":
+        return await this.getCardQueryMetadata(args);
+      case "get_card_dashboards":
+        return await this.getCardDashboards(args);
 
       default:
         throw new McpError(
@@ -383,5 +497,64 @@ export class CardToolHandlers {
         },
       ],
     };
+  }
+
+  private async createPublicLink(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("POST", `/api/card/${card_id}/public_link`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async deletePublicLink(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    await this.client.apiCall("DELETE", `/api/card/${card_id}/public_link`);
+    return { content: [{ type: "text", text: `Public link for card ${card_id} removed.` }] };
+  }
+
+  private async listPublicCards(): Promise<any> {
+    const cards = await this.client.apiCall("GET", `/api/card/public`);
+    return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
+  }
+
+  private async listEmbeddableCards(): Promise<any> {
+    const cards = await this.client.apiCall("GET", `/api/card/embeddable`);
+    return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
+  }
+
+  private async exportCardResult(args: any): Promise<any> {
+    const { card_id, format = "json", parameters = [] } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall(
+      "POST",
+      `/api/card/${card_id}/query/${format}`,
+      { parameters }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async copyCard(args: any): Promise<any> {
+    const { card_id, name, collection_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const body: any = {};
+    if (name) body.name = name;
+    if (collection_id !== undefined) body.collection_id = collection_id;
+    const result = await this.client.apiCall("POST", `/api/card/${card_id}/copy`, body);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardQueryMetadata(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("GET", `/api/card/${card_id}/query_metadata`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardDashboards(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("GET", `/api/card/${card_id}/dashboards`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }

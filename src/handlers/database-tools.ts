@@ -144,6 +144,55 @@ export class DatabaseToolHandlers {
           required: ["database_id"],
         },
       },
+      {
+        name: "check_database_health",
+        description: "Check the connection health of a database",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            database_id: { type: "number", description: "ID of the database" },
+          },
+          required: ["database_id"],
+        },
+      },
+      {
+        name: "validate_database",
+        description: "Validate a database connection before saving",
+        metadata: { mode: ["write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            engine: { type: "string", description: "Database engine (postgres, mysql, etc.)" },
+            details: { type: "object", description: "Connection details to validate" },
+          },
+          required: ["engine", "details"],
+        },
+      },
+      {
+        name: "list_database_schemas",
+        description: "List all schemas within a database",
+        metadata: { mode: ["read", "write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            database_id: { type: "number", description: "ID of the database" },
+          },
+          required: ["database_id"],
+        },
+      },
+      {
+        name: "get_database_metadata",
+        description: "Get full metadata for a database including all tables and fields with their IDs. This is the authoritative source for field IDs needed in MBQL queries.",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            database_id: { type: "number", description: "ID of the database" },
+          },
+          required: ["database_id"],
+        },
+      },
     ];
   }
 
@@ -172,6 +221,15 @@ export class DatabaseToolHandlers {
 
       case "get_database_sync_status":
         return await this.getDatabaseSyncStatus(args);
+
+      case "check_database_health":
+        return await this.checkDatabaseHealth(args);
+      case "validate_database":
+        return await this.validateDatabase(args);
+      case "list_database_schemas":
+        return await this.listDatabaseSchemas(args);
+      case "get_database_metadata":
+        return await this.getDatabaseMetadataTool(args);
 
       default:
         throw new McpError(
@@ -377,5 +435,33 @@ export class DatabaseToolHandlers {
         },
       ],
     };
+  }
+
+  private async checkDatabaseHealth(args: any): Promise<any> {
+    const { database_id } = args;
+    if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
+    const result = await this.client.apiCall("GET", `/api/database/${database_id}/health`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async validateDatabase(args: any): Promise<any> {
+    const { engine, details } = args;
+    if (!engine || !details) throw new McpError(ErrorCode.InvalidParams, "engine and details are required");
+    const result = await this.client.apiCall("POST", `/api/database/validate`, { engine, details });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async listDatabaseSchemas(args: any): Promise<any> {
+    const { database_id } = args;
+    if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
+    const schemas = await this.client.apiCall("GET", `/api/database/${database_id}/schemas`);
+    return { content: [{ type: "text", text: JSON.stringify(schemas, null, 2) }] };
+  }
+
+  private async getDatabaseMetadataTool(args: any): Promise<any> {
+    const { database_id } = args;
+    if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
+    const metadata = await this.client.apiCall("GET", `/api/database/${database_id}/metadata`);
+    return { content: [{ type: "text", text: JSON.stringify(metadata, null, 2) }] };
   }
 }

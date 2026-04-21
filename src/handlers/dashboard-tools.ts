@@ -239,6 +239,98 @@ export class DashboardToolHandlers {
           required: ["dashboard_id", "dashcard_id"],
         },
       },
+      {
+        name: "create_dashboard_public_link",
+        description: "Create a public sharing link for a dashboard. Returns the UUID for the public URL.",
+        metadata: { mode: ["write", "all"], tags: ["dashboard", "sharing"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard to share" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "delete_dashboard_public_link",
+        description: "Remove the public sharing link for a dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard", "sharing"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "list_public_dashboards",
+        description: "List all dashboards that have public sharing links enabled",
+        metadata: { mode: ["read", "write", "all"], tags: ["dashboard", "sharing"] },
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "list_embeddable_dashboards",
+        description: "List all dashboards that are set up for embedding",
+        metadata: { mode: ["read", "write", "all"], tags: ["dashboard", "sharing"] },
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "copy_dashboard",
+        description: "Duplicate a dashboard with all its cards",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard to copy" },
+            name: { type: "string", description: "Name for the copy" },
+            collection_id: { type: "number", description: "Collection to place the copy in" },
+            is_deep_copy: {
+              type: "boolean",
+              description: "Copy underlying cards too (default: false = shallow copy)",
+              default: false,
+            },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "get_dashboard_revisions",
+        description: "Get revision history for a dashboard (audit trail)",
+        metadata: { mode: ["read", "write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "revert_dashboard",
+        description: "Revert a dashboard to a previous revision",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+            revision_id: { type: "number", description: "ID of the revision to revert to" },
+          },
+          required: ["dashboard_id", "revision_id"],
+        },
+      },
+      {
+        name: "get_dashboard_related",
+        description: "Get related content suggestions for a dashboard",
+        metadata: { mode: ["read", "write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
     ];
   }
 
@@ -299,6 +391,23 @@ export class DashboardToolHandlers {
 
       case "update_dashboard_card":
         return await this.updateDashboardCard(args);
+
+      case "create_dashboard_public_link":
+        return await this.createPublicLink(args);
+      case "delete_dashboard_public_link":
+        return await this.deletePublicLink(args);
+      case "list_public_dashboards":
+        return await this.listPublicDashboards();
+      case "list_embeddable_dashboards":
+        return await this.listEmbeddableDashboards();
+      case "copy_dashboard":
+        return await this.copyDashboard(args);
+      case "get_dashboard_revisions":
+        return await this.getDashboardRevisions(args);
+      case "revert_dashboard":
+        return await this.revertDashboard(args);
+      case "get_dashboard_related":
+        return await this.getDashboardRelated(args);
 
       default:
         throw new McpError(
@@ -604,7 +713,7 @@ export class DashboardToolHandlers {
     }
 
     let result;
-    
+
     try {
       // Approach 1: Direct PUT to specific card
       result = await this.client.apiCall(
@@ -648,5 +757,67 @@ export class DashboardToolHandlers {
         },
       ],
     };
+  }
+
+  private async createPublicLink(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    const result = await this.client.apiCall("POST", `/api/dashboard/${dashboard_id}/public_link`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async deletePublicLink(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    await this.client.apiCall("DELETE", `/api/dashboard/${dashboard_id}/public_link`);
+    return { content: [{ type: "text", text: `Public link for dashboard ${dashboard_id} removed.` }] };
+  }
+
+  private async listPublicDashboards(): Promise<any> {
+    const dashboards = await this.client.apiCall("GET", `/api/dashboard/public`);
+    return { content: [{ type: "text", text: JSON.stringify(dashboards, null, 2) }] };
+  }
+
+  private async listEmbeddableDashboards(): Promise<any> {
+    const dashboards = await this.client.apiCall("GET", `/api/dashboard/embeddable`);
+    return { content: [{ type: "text", text: JSON.stringify(dashboards, null, 2) }] };
+  }
+
+  private async copyDashboard(args: any): Promise<any> {
+    const { dashboard_id, name, collection_id, is_deep_copy = false } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    const body: any = { is_deep_copy };
+    if (name) body.name = name;
+    if (collection_id !== undefined) body.collection_id = collection_id;
+    const result = await this.client.apiCall("POST", `/api/dashboard/${dashboard_id}/copy`, body);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getDashboardRevisions(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    const revisions = await this.client.apiCall(
+      "GET", `/api/revision`, { entity: "dashboard", id: dashboard_id }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(revisions, null, 2) }] };
+  }
+
+  private async revertDashboard(args: any): Promise<any> {
+    const { dashboard_id, revision_id } = args;
+    if (!dashboard_id || !revision_id) {
+      throw new McpError(ErrorCode.InvalidParams, "dashboard_id and revision_id are required");
+    }
+    const result = await this.client.apiCall(
+      "POST", `/api/revision/revert`,
+      { entity: "dashboard", id: dashboard_id, revision_id }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getDashboardRelated(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    const result = await this.client.apiCall("GET", `/api/dashboard/${dashboard_id}/related`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }
