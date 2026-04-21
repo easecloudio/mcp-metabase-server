@@ -6,37 +6,75 @@ import { MetabaseClient } from "../client/metabase-client.js";
 import { DashboardToolHandlers } from "./dashboard-tools.js";
 import { CardToolHandlers } from "./card-tools.js";
 import { DatabaseToolHandlers } from "./database-tools.js";
+import { TableToolHandlers } from "./table-tools.js";
 import { ErrorCode, McpError } from "../types/errors.js";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { ToolMode, TaggedTool } from "../types/tool-metadata.js";
 
 export class ToolRegistry {
   private dashboardHandlers: DashboardToolHandlers;
   private cardHandlers: CardToolHandlers;
   private databaseHandlers: DatabaseToolHandlers;
+  private tableHandlers: TableToolHandlers;
+  private toolMode: ToolMode;
+  private visibleToolNames: Set<string> | null = null;
 
   constructor(private client: MetabaseClient) {
     this.dashboardHandlers = new DashboardToolHandlers(client);
     this.cardHandlers = new CardToolHandlers(client);
     this.databaseHandlers = new DatabaseToolHandlers(client);
+    this.tableHandlers = new TableToolHandlers(client);
+
+    const mode = process.env.TOOL_MODE as ToolMode;
+    this.toolMode = (["essential", "read", "write", "all"] as ToolMode[]).includes(mode)
+      ? mode
+      : "all";
+
+    this.visibleToolNames = this.toolMode === "all"
+      ? null  // null means "all allowed"
+      : new Set(this.getAllToolSchemas().map(t => t.name));
   }
 
   /**
-   * Get all available tool schemas
+   * Get all available tool schemas, filtered by TOOL_MODE
    */
   getAllToolSchemas(): Tool[] {
-    return [
+    const all = [
       ...this.dashboardHandlers.getToolSchemas(),
       ...this.cardHandlers.getToolSchemas(),
       ...this.databaseHandlers.getToolSchemas(),
+      ...this.tableHandlers.getToolSchemas(),
       // Add other tool schemas for collections, users, etc.
       ...this.getAdditionalToolSchemas(),
-    ];
+    ] as TaggedTool[];
+
+    if (this.toolMode === "all") return all;
+
+    return all.filter(tool => {
+      const meta = tool.metadata;
+      if (!meta) {
+        console.error(JSON.stringify({
+          level: "warn",
+          message: `Tool '${tool.name}' has no metadata and will be hidden in TOOL_MODE '${this.toolMode}'`,
+        }));
+        return false;
+      }
+      return meta.mode.includes(this.toolMode);
+    });
   }
 
   /**
    * Handle a tool call
    */
   async handleTool(name: string, args: any): Promise<any> {
+    // Enforce mode filter — reject tools not visible in current mode
+    if (this.visibleToolNames !== null && !this.visibleToolNames.has(name)) {
+      throw new McpError(
+        ErrorCode.MethodNotFound,
+        `Tool not available in TOOL_MODE '${this.toolMode}': ${name}`
+      );
+    }
+
     // Dashboard tools
     if (this.isDashboardTool(name)) {
       return await this.dashboardHandlers.handleTool(name, args);
@@ -50,6 +88,11 @@ export class ToolRegistry {
     // Database tools
     if (this.isDatabaseTool(name)) {
       return await this.databaseHandlers.handleTool(name, args);
+    }
+
+    // Table tools
+    if (this.isTableTool(name)) {
+      return await this.tableHandlers.handleTool(name, args);
     }
 
     // Handle other tools directly
@@ -68,6 +111,14 @@ export class ToolRegistry {
         "add_card_to_dashboard",
         "remove_card_from_dashboard",
         "update_dashboard_card",
+        "create_dashboard_public_link",
+        "delete_dashboard_public_link",
+        "list_public_dashboards",
+        "list_embeddable_dashboards",
+        "copy_dashboard",
+        "get_dashboard_revisions",
+        "revert_dashboard",
+        "get_dashboard_related",
       ].includes(name)
     );
   }
@@ -82,6 +133,14 @@ export class ToolRegistry {
         "update_card",
         "delete_card",
         "execute_card",
+        "create_card_public_link",
+        "delete_card_public_link",
+        "list_public_cards",
+        "list_embeddable_cards",
+        "export_card_result",
+        "copy_card",
+        "get_card_query_metadata",
+        "get_card_dashboards",
       ].includes(name)
     );
   }
@@ -95,11 +154,27 @@ export class ToolRegistry {
         "execute_query",
         "get_database_schema",
         "get_database_tables",
+        "create_database_connection",
+        "test_database_connection",
+        "sync_database_schema",
+        "get_database_sync_status",
+        "check_database_health",
+        "validate_database",
+        "list_database_schemas",
+        "get_database_metadata",
       ].includes(name)
     );
   }
 
-  private getAdditionalToolSchemas(): Tool[] {
+  private isTableTool(name: string): boolean {
+    return [
+      "list_tables", "get_table", "get_table_metadata", "get_table_fks",
+      "get_field_id", "update_table", "sync_table_schema",
+      "rescan_table_field_values", "discard_table_field_values",
+    ].includes(name);
+  }
+
+  private getAdditionalToolSchemas(): TaggedTool[] {
     return [
       // Collection tools
       {
@@ -115,6 +190,7 @@ export class ToolRegistry {
             },
           },
         },
+        metadata: { mode: ["read", "write", "all"], tags: ["collection"] },
       },
       {
         name: "create_collection",
@@ -135,6 +211,66 @@ export class ToolRegistry {
           },
           required: ["name"],
         },
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
+      },
+      {
+        name: "get_collection",
+        description: "Get details of a specific collection",
+        metadata: { mode: ["read", "write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: { type: ["number", "string"], description: "ID of the collection (use 'root' for root collection)" },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "update_collection",
+        description: "Update a collection's name, description, color, or parent",
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: { type: "number", description: "ID of the collection" },
+            name: { type: "string", description: "New name" },
+            description: { type: "string" },
+            color: { type: "string", description: "Hex color e.g. #31698A" },
+            parent_id: { type: "number", description: "New parent collection ID" },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "delete_collection",
+        description: "Delete a collection and all its contents",
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: { type: "number", description: "ID of the collection to delete" },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "get_collection_items",
+        description: "List items (cards, dashboards, sub-collections) inside a collection",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: {
+              type: "number",
+              description: "ID of the collection (omit or use null for root)",
+            },
+            models: {
+              type: "array",
+              description: "Filter by content type",
+              items: { type: "string", enum: ["card", "dashboard", "collection", "dataset"] },
+            },
+          },
+        },
       },
       // User tools
       {
@@ -150,6 +286,7 @@ export class ToolRegistry {
             },
           },
         },
+        metadata: { mode: ["read", "write", "all"], tags: ["user"] },
       },
       {
         name: "create_user",
@@ -169,6 +306,7 @@ export class ToolRegistry {
           },
           required: ["first_name", "last_name", "email"],
         },
+        metadata: { mode: ["write", "all"], tags: ["user"] },
       },
       // Permission tools
       {
@@ -178,6 +316,7 @@ export class ToolRegistry {
           type: "object",
           properties: {},
         },
+        metadata: { mode: ["read", "write", "all"], tags: ["permission"] },
       },
       {
         name: "create_permission_group",
@@ -192,6 +331,7 @@ export class ToolRegistry {
           },
           required: ["name"],
         },
+        metadata: { mode: ["write", "all"], tags: ["permission"] },
       },
       // Search tools
       {
@@ -212,6 +352,7 @@ export class ToolRegistry {
           },
           required: ["query"],
         },
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["search"] },
       },
     ];
   }
@@ -223,6 +364,14 @@ export class ToolRegistry {
         return await this.handleListCollections(args);
       case "create_collection":
         return await this.handleCreateCollection(args);
+      case "get_collection":
+        return await this.handleGetCollection(args);
+      case "update_collection":
+        return await this.handleUpdateCollection(args);
+      case "delete_collection":
+        return await this.handleDeleteCollection(args);
+      case "get_collection_items":
+        return await this.handleGetCollectionItems(args);
 
       // User operations
       case "list_users":
@@ -373,5 +522,32 @@ export class ToolRegistry {
         },
       ],
     };
+  }
+
+  private async handleGetCollection(args: any): Promise<any> {
+    const { collection_id } = args;
+    const result = await this.client.apiCall("GET", `/api/collection/${collection_id}`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async handleUpdateCollection(args: any): Promise<any> {
+    const { collection_id, ...updates } = args;
+    const result = await this.client.apiCall("PUT", `/api/collection/${collection_id}`, updates);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async handleDeleteCollection(args: any): Promise<any> {
+    const { collection_id } = args;
+    await this.client.apiCall("DELETE", `/api/collection/${collection_id}`);
+    return { content: [{ type: "text", text: `Collection ${collection_id} deleted.` }] };
+  }
+
+  private async handleGetCollectionItems(args: any): Promise<any> {
+    const { collection_id, models } = args;
+    const id = collection_id ?? "root";
+    const params: any = {};
+    if (models?.length) params.models = models.join(",");
+    const result = await this.client.apiCall("GET", `/api/collection/${id}/items`, params);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }
