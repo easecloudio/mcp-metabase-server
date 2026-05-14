@@ -113,18 +113,29 @@ export class ToolRegistry {
       name.startsWith("dashboard") ||
       [
         "list_dashboards",
+        "get_dashboard",
         "create_dashboard",
         "update_dashboard",
         "delete_dashboard",
+        "copy_dashboard",
+        "save_dashboard",
+        "save_dashboard_to_collection",
         "get_dashboard_cards",
         "add_card_to_dashboard",
         "remove_card_from_dashboard",
         "update_dashboard_card",
+        "update_dashboard_cards",
+        "update_dashcard",
+        "add_text_block",
+        "execute_dashboard_card",
+        "search_dashboards",
+        "favorite_dashboard",
+        "unfavorite_dashboard",
+        "get_dashboard_queries",
         "create_dashboard_public_link",
         "delete_dashboard_public_link",
         "list_public_dashboards",
         "list_embeddable_dashboards",
-        "copy_dashboard",
         "get_dashboard_revisions",
         "revert_dashboard",
         "get_dashboard_related",
@@ -142,14 +153,21 @@ export class ToolRegistry {
         "update_card",
         "delete_card",
         "execute_card",
+        "execute_pivot_card_query",
+        "copy_card",
+        "move_cards",
+        "move_cards_to_collection",
+        "export_card_result",
         "create_card_public_link",
         "delete_card_public_link",
         "list_public_cards",
         "list_embeddable_cards",
-        "export_card_result",
-        "copy_card",
         "get_card_query_metadata",
         "get_card_dashboards",
+        "get_card_param_values",
+        "search_card_param_values",
+        "get_card_param_remapping",
+        "get_card_series",
       ].includes(name)
     );
   }
@@ -157,20 +175,23 @@ export class ToolRegistry {
   private isDatabaseTool(name: string): boolean {
     return (
       name.startsWith("database") ||
-      name.includes("query") ||
       [
         "list_databases",
+        "get_database",
+        "update_database",
+        "delete_database",
+        "add_sample_database",
         "execute_query",
         "get_database_schema",
         "get_database_tables",
+        "get_database_metadata",
+        "list_database_schemas",
         "create_database_connection",
         "test_database_connection",
+        "validate_database",
         "sync_database_schema",
         "get_database_sync_status",
         "check_database_health",
-        "validate_database",
-        "list_database_schemas",
-        "get_database_metadata",
       ].includes(name)
     );
   }
@@ -178,8 +199,10 @@ export class ToolRegistry {
   private isTableTool(name: string): boolean {
     return [
       "list_tables", "get_table", "get_table_metadata", "get_table_fks",
-      "get_field_id", "update_table", "sync_table_schema",
-      "rescan_table_field_values", "discard_table_field_values",
+      "get_table_related", "get_table_data", "update_table", "update_tables",
+      "sync_table_schema", "rescan_table_field_values", "discard_table_field_values",
+      "reorder_table_fields", "append_csv_to_table", "replace_table_csv",
+      "get_field_id", "get_card_table_fks", "get_card_table_query_metadata",
     ].includes(name);
   }
 
@@ -346,6 +369,21 @@ export class ToolRegistry {
         },
         metadata: { mode: ["write", "all"], tags: ["permission"] },
       },
+      // Move items
+      {
+        name: "move_to_collection",
+        description: "Move a card or dashboard to a different collection",
+        metadata: { mode: ["write", "all"], tags: ["collection"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            model: { type: "string", enum: ["card", "dashboard"], description: "Type of item to move" },
+            id: { type: "number", description: "ID of the card or dashboard" },
+            collection_id: { type: ["number", "null"], description: "Destination collection ID (null for root)" },
+          },
+          required: ["model", "id", "collection_id"],
+        },
+      },
       // Search tools
       {
         name: "search_content",
@@ -401,6 +439,10 @@ export class ToolRegistry {
       // Search operations
       case "search_content":
         return await this.handleSearchContent(args);
+
+      // Move items
+      case "move_to_collection":
+        return await this.handleMoveToCollection(args);
 
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
@@ -563,6 +605,14 @@ export class ToolRegistry {
     const params: any = {};
     if (models?.length) params.models = models;
     const result = await this.client.apiCall("GET", `/api/collection/${id}/items`, params);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async handleMoveToCollection(args: any): Promise<any> {
+    const { model, id, collection_id } = args;
+    if (!model || id === undefined) throw new McpError(ErrorCode.InvalidParams, "model and id are required");
+    const endpoint = model === "card" ? `/api/card/${id}` : `/api/dashboard/${id}`;
+    const result = await this.client.apiCall("PUT", endpoint, { collection_id });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }
