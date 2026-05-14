@@ -1,7 +1,7 @@
 {
   "name": "@easecloudio/mcp-metabase-server",
   "version": "1.2.0",
-  "description": "A Model Context Protocol server for Metabase integration",
+  "description": "MCP server for Metabase — 64 tools covering dashboards, cards, databases, tables, collections, public sharing, schema cache, and SQL-to-MBQL conversion",
   "author": "Safoor Safdar <safoor@easecloud.io>",
   "license": "MIT",
   "repository": {
@@ -17,12 +17,17 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "metabase",
     "analytics",
     "business-intelligence",
     "ai",
-    "claude"
+    "claude",
+    "dashboard",
+    "sql",
+    "mbql",
+    "bi"
   ],
   "private": false,
   "type": "module",
