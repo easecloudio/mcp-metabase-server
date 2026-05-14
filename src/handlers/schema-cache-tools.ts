@@ -148,10 +148,7 @@ export class SchemaCacheToolHandlers {
   }
 
   private async fetchAndCache(databaseId: number): Promise<DatabaseSchema> {
-    const metadata = await this.client.apiCall(
-      "GET",
-      `/api/database/${databaseId}/metadata`
-    );
+    const metadata = await this.client.getDatabaseMetadata(databaseId);
 
     const tables: CachedTable[] = (metadata.tables ?? []).map((t: any) => ({
       id: t.id,
