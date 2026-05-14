@@ -526,12 +526,14 @@ export class ToolRegistry {
 
   private async handleGetCollection(args: any): Promise<any> {
     const { collection_id } = args;
+    if (!collection_id) throw new McpError(ErrorCode.InvalidParams, "collection_id is required");
     const result = await this.client.apiCall("GET", `/api/collection/${collection_id}`);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
   private async handleUpdateCollection(args: any): Promise<any> {
     const { collection_id, ...updates } = args;
+    if (!collection_id) throw new McpError(ErrorCode.InvalidParams, "collection_id is required");
     const result = await this.client.apiCall("PUT", `/api/collection/${collection_id}`, updates);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
@@ -546,7 +548,7 @@ export class ToolRegistry {
     const { collection_id, models } = args;
     const id = collection_id ?? "root";
     const params: any = {};
-    if (models?.length) params.models = models.join(",");
+    if (models?.length) params.models = models;
     const result = await this.client.apiCall("GET", `/api/collection/${id}/items`, params);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }

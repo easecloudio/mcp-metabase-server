@@ -526,6 +526,9 @@ export class CardToolHandlers {
   private async exportCardResult(args: any): Promise<any> {
     const { card_id, format = "json", parameters = [] } = args;
     if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    if (format === "xlsx") {
+      return { content: [{ type: "text", text: "xlsx export is not supported via MCP — use csv or json format instead" }] };
+    }
     const result = await this.client.apiCall(
       "POST",
       `/api/card/${card_id}/query/${format}`,
