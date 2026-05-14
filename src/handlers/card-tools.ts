@@ -307,6 +307,118 @@ export class CardToolHandlers {
           required: ["card_id"],
         },
       },
+      {
+        name: "move_cards",
+        description: "Move one or more cards to a different collection",
+        metadata: { mode: ["write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_ids: {
+              type: "array",
+              items: { type: "number" },
+              description: "IDs of the cards to move",
+            },
+            collection_id: {
+              type: ["number", "null"],
+              description: "ID of the destination collection, or null for root",
+            },
+          },
+          required: ["card_ids", "collection_id"],
+        },
+      },
+      {
+        name: "move_cards_to_collection",
+        description: "Move all cards matching a filter to a specific collection",
+        metadata: { mode: ["write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            collection_id: {
+              type: "number",
+              description: "ID of the destination collection",
+            },
+            source_collection_id: {
+              type: "number",
+              description: "If provided, only move cards from this collection",
+            },
+          },
+          required: ["collection_id"],
+        },
+      },
+      {
+        name: "execute_pivot_card_query",
+        description: "Execute a card query and return results formatted as a pivot table",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card to execute" },
+            parameters: {
+              type: "array",
+              description: "Optional parameters for the query",
+              items: { type: "object" },
+            },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "get_card_param_values",
+        description: "Get available values for a card parameter (for populating filter dropdowns)",
+        metadata: { mode: ["read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+            param_id: {
+              type: "string",
+              description: "The parameter ID/slug",
+            },
+          },
+          required: ["card_id", "param_id"],
+        },
+      },
+      {
+        name: "search_card_param_values",
+        description: "Search and filter available values for a card parameter",
+        metadata: { mode: ["read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+            param_id: { type: "string", description: "The parameter ID/slug" },
+            query: { type: "string", description: "Search term to filter values" },
+          },
+          required: ["card_id", "param_id", "query"],
+        },
+      },
+      {
+        name: "get_card_param_remapping",
+        description: "Get how a card parameter's values are remapped for display (e.g. ID to name)",
+        metadata: { mode: ["read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+            param_id: { type: "string", description: "The parameter ID/slug" },
+            value: { type: "string", description: "The raw value to remap" },
+          },
+          required: ["card_id", "param_id", "value"],
+        },
+      },
+      {
+        name: "get_card_series",
+        description: "Get time series data or related card suggestions for a card",
+        metadata: { mode: ["read", "write", "all"], tags: ["card"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card" },
+          },
+          required: ["card_id"],
+        },
+      },
     ];
   }
 
@@ -346,6 +458,27 @@ export class CardToolHandlers {
         return await this.getCardQueryMetadata(args);
       case "get_card_dashboards":
         return await this.getCardDashboards(args);
+
+      case "move_cards":
+        return await this.moveCards(args);
+
+      case "move_cards_to_collection":
+        return await this.moveCardsToCollection(args);
+
+      case "execute_pivot_card_query":
+        return await this.executePivotCardQuery(args);
+
+      case "get_card_param_values":
+        return await this.getCardParamValues(args);
+
+      case "search_card_param_values":
+        return await this.searchCardParamValues(args);
+
+      case "get_card_param_remapping":
+        return await this.getCardParamRemapping(args);
+
+      case "get_card_series":
+        return await this.getCardSeries(args);
 
       default:
         throw new McpError(
@@ -558,6 +691,80 @@ export class CardToolHandlers {
     const { card_id } = args;
     if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
     const result = await this.client.apiCall("GET", `/api/card/${card_id}/dashboards`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async moveCards(args: any): Promise<any> {
+    const { card_ids, collection_id } = args;
+    if (!card_ids || !Array.isArray(card_ids) || card_ids.length === 0) {
+      throw new McpError(ErrorCode.InvalidParams, "card_ids is required and must be a non-empty array");
+    }
+    if (collection_id === undefined) {
+      throw new McpError(ErrorCode.InvalidParams, "collection_id is required (use null for root)");
+    }
+    const result = await this.client.apiCall("POST", `/api/card/collections`, { card_ids, collection_id });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async moveCardsToCollection(args: any): Promise<any> {
+    const { collection_id, source_collection_id } = args;
+    if (!collection_id) {
+      throw new McpError(ErrorCode.InvalidParams, "collection_id is required");
+    }
+    const cards: any[] = await this.client.apiCall("GET", `/api/card?f=all`);
+    const filtered = source_collection_id !== undefined
+      ? cards.filter((c: any) => c.collection_id === source_collection_id)
+      : cards;
+    const card_ids = filtered.map((c: any) => c.id);
+    if (card_ids.length === 0) {
+      return { content: [{ type: "text", text: JSON.stringify({ moved: 0, card_ids: [] }, null, 2) }] };
+    }
+    await this.client.apiCall("POST", `/api/card/collections`, { card_ids, collection_id });
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ moved: card_ids.length, card_ids }, null, 2),
+      }],
+    };
+  }
+
+  private async executePivotCardQuery(args: any): Promise<any> {
+    const { card_id, parameters = [] } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("POST", `/api/card/${card_id}/query/pivot`, { parameters });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardParamValues(args: any): Promise<any> {
+    const { card_id, param_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    if (!param_id) throw new McpError(ErrorCode.InvalidParams, "param_id is required");
+    const result = await this.client.apiCall("GET", `/api/card/${card_id}/params/${param_id}/values`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async searchCardParamValues(args: any): Promise<any> {
+    const { card_id, param_id, query } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    if (!param_id) throw new McpError(ErrorCode.InvalidParams, "param_id is required");
+    if (!query) throw new McpError(ErrorCode.InvalidParams, "query is required");
+    const result = await this.client.apiCall("GET", `/api/card/${card_id}/params/${param_id}/search/${encodeURIComponent(query)}`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardParamRemapping(args: any): Promise<any> {
+    const { card_id, param_id, value } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    if (!param_id) throw new McpError(ErrorCode.InvalidParams, "param_id is required");
+    if (value === undefined || value === null) throw new McpError(ErrorCode.InvalidParams, "value is required");
+    const result = await this.client.apiCall("GET", `/api/card/${card_id}/params/${param_id}/remapping?value=${encodeURIComponent(value)}`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardSeries(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("GET", `/api/card/${card_id}/series`);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }

@@ -131,6 +131,125 @@ export class TableToolHandlers {
           required: ["table_id"],
         },
       },
+      {
+        name: "update_tables",
+        description: "Bulk-update multiple tables with the same configuration (e.g. hide all at once)",
+        metadata: { mode: ["write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_ids: {
+              type: "array",
+              items: { type: "number" },
+              description: "List of table IDs to update",
+            },
+            display_name: { type: "string", description: "New display name for all specified tables" },
+            description: { type: "string", description: "Description for all specified tables" },
+            visibility_type: {
+              type: "string",
+              enum: ["normal", "hidden", "technical", "cruft"],
+              description: "Visibility type for all specified tables",
+            },
+          },
+          required: ["table_ids"],
+        },
+      },
+      {
+        name: "get_table_related",
+        description: "Find tables and entities related to this table through foreign key relationships",
+        metadata: { mode: ["read", "write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_id: { type: "number", description: "ID of the table" },
+          },
+          required: ["table_id"],
+        },
+      },
+      {
+        name: "get_card_table_fks",
+        description: "Get foreign key relationships for a card's virtual table",
+        metadata: { mode: ["read", "write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card (question)" },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "get_card_table_query_metadata",
+        description: "Get query metadata (fields, types) for a card's virtual table",
+        metadata: { mode: ["read", "write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            card_id: { type: "number", description: "ID of the card (question)" },
+          },
+          required: ["card_id"],
+        },
+      },
+      {
+        name: "get_table_data",
+        description: "Get a sample data preview from a table",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_id: { type: "number", description: "ID of the table" },
+            limit: {
+              type: "number",
+              description: "Max rows to return (default: 10)",
+              default: 10,
+            },
+          },
+          required: ["table_id"],
+        },
+      },
+      {
+        name: "append_csv_to_table",
+        description: "Append new rows to a table from CSV content (for Metabase-managed tables)",
+        metadata: { mode: ["write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_id: { type: "number", description: "ID of the table" },
+            csv_content: { type: "string", description: "Raw CSV text to append" },
+          },
+          required: ["table_id", "csv_content"],
+        },
+      },
+      {
+        name: "replace_table_csv",
+        description: "Replace all data in a table with new CSV content (for Metabase-managed tables)",
+        metadata: { mode: ["write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_id: { type: "number", description: "ID of the table" },
+            csv_content: { type: "string", description: "Raw CSV text to replace table data with" },
+          },
+          required: ["table_id", "csv_content"],
+        },
+      },
+      {
+        name: "reorder_table_fields",
+        description: "Change the display order of fields in a table",
+        metadata: { mode: ["write", "all"], tags: ["table"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_id: { type: "number", description: "ID of the table" },
+            field_order: {
+              type: "array",
+              items: { type: "number" },
+              description: "Ordered list of field IDs representing the desired display order",
+            },
+          },
+          required: ["table_id", "field_order"],
+        },
+      },
     ];
   }
 
@@ -145,6 +264,14 @@ export class TableToolHandlers {
       case "sync_table_schema": return await this.syncTableSchema(args);
       case "rescan_table_field_values": return await this.rescanTableFieldValues(args);
       case "discard_table_field_values": return await this.discardTableFieldValues(args);
+      case "update_tables":              return await this.updateTables(args);
+      case "get_table_related":          return await this.getTableRelated(args);
+      case "get_card_table_fks":         return await this.getCardTableFks(args);
+      case "get_card_table_query_metadata": return await this.getCardTableQueryMetadata(args);
+      case "get_table_data":             return await this.getTableData(args);
+      case "append_csv_to_table":        return await this.appendCsvToTable(args);
+      case "replace_table_csv":          return await this.replaceTableCsv(args);
+      case "reorder_table_fields":       return await this.reorderTableFields(args);
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown table tool: ${name}`);
     }
@@ -244,5 +371,79 @@ export class TableToolHandlers {
     if (!table_id) throw new McpError(ErrorCode.InvalidParams, "table_id is required");
     await this.client.apiCall("POST", `/api/table/${table_id}/discard_values`);
     return { content: [{ type: "text", text: `Table ${table_id} field values discarded.` }] };
+  }
+
+  private async updateTables(args: any): Promise<any> {
+    const { table_ids, display_name, description, visibility_type } = args;
+    if (!table_ids || !Array.isArray(table_ids) || table_ids.length === 0) {
+      throw new McpError(ErrorCode.InvalidParams, "table_ids is required and must be a non-empty array");
+    }
+    const updates: Record<string, any> = { ids: table_ids };
+    if (display_name !== undefined) updates.display_name = display_name;
+    if (description !== undefined) updates.description = description;
+    if (visibility_type !== undefined) updates.visibility_type = visibility_type;
+    const result = await this.client.apiCall("PUT", `/api/table`, updates);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getTableRelated(args: any): Promise<any> {
+    const { table_id } = args;
+    if (!table_id) throw new McpError(ErrorCode.InvalidParams, "table_id is required");
+    const result = await this.client.apiCall("GET", `/api/table/${table_id}/related`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardTableFks(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("GET", `/api/table/card__${card_id}/fks`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getCardTableQueryMetadata(args: any): Promise<any> {
+    const { card_id } = args;
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall("GET", `/api/table/card__${card_id}/query_metadata`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getTableData(args: any): Promise<any> {
+    const { table_id, limit = 10 } = args;
+    if (!table_id) throw new McpError(ErrorCode.InvalidParams, "table_id is required");
+    // Fetch table info first to get the database ID
+    const tableInfo = await this.client.apiCall("GET", `/api/table/${table_id}`);
+    const db_id = tableInfo.db_id;
+    const result = await this.client.apiCall("POST", `/api/dataset`, {
+      type: "query",
+      database: db_id,
+      query: { "source-table": table_id, limit },
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async appendCsvToTable(args: any): Promise<any> {
+    const { table_id, csv_content } = args;
+    if (!table_id) throw new McpError(ErrorCode.InvalidParams, "table_id is required");
+    if (!csv_content) throw new McpError(ErrorCode.InvalidParams, "csv_content is required");
+    const result = await this.client.apiCall("POST", `/api/table/${table_id}/append`, { csv: csv_content });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async replaceTableCsv(args: any): Promise<any> {
+    const { table_id, csv_content } = args;
+    if (!table_id) throw new McpError(ErrorCode.InvalidParams, "table_id is required");
+    if (!csv_content) throw new McpError(ErrorCode.InvalidParams, "csv_content is required");
+    const result = await this.client.apiCall("POST", `/api/table/${table_id}/replace`, { csv: csv_content });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async reorderTableFields(args: any): Promise<any> {
+    const { table_id, field_order } = args;
+    if (!table_id) throw new McpError(ErrorCode.InvalidParams, "table_id is required");
+    if (!field_order || !Array.isArray(field_order) || field_order.length === 0) {
+      throw new McpError(ErrorCode.InvalidParams, "field_order is required and must be a non-empty array");
+    }
+    const result = await this.client.apiCall("PUT", `/api/table/${table_id}/fields/order`, field_order);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }

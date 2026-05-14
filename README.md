@@ -17,15 +17,15 @@ export METABASE_API_KEY=your_metabase_api_key
 npx @easecloudio/mcp-metabase-server
 ```
 
-## 64 Tools Available
+## 96 Tools Available
 
 | Domain | Tools |
 |---|---|
-| Dashboard Management | 16 |
-| Card / Question Management | 14 |
-| Database Management | 12 |
-| Table Management | 9 |
-| Collections, Users & Search | 11 |
+| Dashboard Management | 27 |
+| Card / Question Management | 21 |
+| Database Management | 16 |
+| Table Management | 17 |
+| Collections, Users & Search | 13 |
 | Schema Cache (SQL→MBQL) | 2 |
 
 ## Supported Metabase Versions
@@ -175,24 +175,34 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 ## Available Tools
 
 <details>
-<summary><strong>Dashboard Management (16 tools)</strong></summary>
+<summary><strong>Dashboard Management (27 tools)</strong></summary>
 
 ### Core CRUD
 | Tool | Description |
 |---|---|
 | `list_dashboards` | List all dashboards |
+| `get_dashboard` | Get a specific dashboard by ID |
 | `create_dashboard` | Create a new dashboard |
 | `update_dashboard` | Update an existing dashboard |
 | `delete_dashboard` | Delete / archive a dashboard |
 | `copy_dashboard` | Duplicate a dashboard (shallow or deep copy) |
+| `save_dashboard` | Save a complete dashboard object with nested data |
+| `save_dashboard_to_collection` | Move a dashboard into a specific collection |
+| `search_dashboards` | Search dashboards by name or description |
+| `favorite_dashboard` | Mark a dashboard as a favourite |
+| `unfavorite_dashboard` | Remove a dashboard from favourites |
 
 ### Card Layout
 | Tool | Description |
 |---|---|
 | `get_dashboard_cards` | Get all cards in a dashboard |
 | `add_card_to_dashboard` | Add a card with positioning |
+| `add_text_block` | Add a text or heading block to a dashboard |
 | `remove_card_from_dashboard` | Remove a card |
 | `update_dashboard_card` | Update card position, size, and settings |
+| `update_dashboard_cards` | Bulk-replace all cards on a dashboard |
+| `update_dashcard` | Update a specific dashcard's properties |
+| `execute_dashboard_card` | Execute a specific dashcard and return results |
 
 ### Public Sharing & Embedding
 | Tool | Description |
@@ -202,17 +212,18 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 | `list_public_dashboards` | List dashboards with public links |
 | `list_embeddable_dashboards` | List dashboards enabled for embedding |
 
-### Revision & Discovery
+### Revision, Audit & Discovery
 | Tool | Description |
 |---|---|
 | `get_dashboard_revisions` | Get revision history (audit trail) |
 | `revert_dashboard` | Revert to a previous revision |
 | `get_dashboard_related` | Get related content suggestions |
+| `get_dashboard_queries` | Extract all card queries with resolved field IDs |
 
 </details>
 
 <details>
-<summary><strong>Card / Question Management (14 tools)</strong></summary>
+<summary><strong>Card / Question Management (21 tools)</strong></summary>
 
 ### Core CRUD
 | Tool | Description |
@@ -223,18 +234,29 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 | `update_card` | Update an existing question |
 | `delete_card` | Delete / archive a question |
 | `copy_card` | Duplicate a card |
+| `move_cards` | Move one or more cards to a different collection |
+| `move_cards_to_collection` | Bulk-move cards from a source collection |
 
 ### Execution & Export
 | Tool | Description |
 |---|---|
 | `execute_card` | Run a card and return results |
+| `execute_pivot_card_query` | Run a card formatted as a pivot table |
 | `export_card_result` | Export results as CSV or JSON |
+
+### Parameters
+| Tool | Description |
+|---|---|
+| `get_card_param_values` | Get available values for a card parameter |
+| `search_card_param_values` | Search / filter parameter values |
+| `get_card_param_remapping` | Get how parameter values are remapped for display |
 
 ### Metadata & Discovery
 | Tool | Description |
 |---|---|
 | `get_card_query_metadata` | Get column types and display names |
 | `get_card_dashboards` | List dashboards containing this card |
+| `get_card_series` | Get series data or related card suggestions |
 
 ### Public Sharing & Embedding
 | Tool | Description |
@@ -247,14 +269,22 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 </details>
 
 <details>
-<summary><strong>Database Management (12 tools)</strong></summary>
+<summary><strong>Database Management (16 tools)</strong></summary>
 
-### Core Operations
+### Core CRUD
 | Tool | Description |
 |---|---|
 | `list_databases` | List all database connections |
-| `execute_query` | Execute a SQL query against a database |
+| `get_database` | Get a specific database by ID |
 | `create_database_connection` | Create a new database connection |
+| `update_database` | Update a database connection's config or credentials |
+| `delete_database` | Permanently remove a database connection |
+| `add_sample_database` | Add the built-in H2 sample database with demo data |
+
+### Querying
+| Tool | Description |
+|---|---|
+| `execute_query` | Execute a SQL query against a database |
 
 ### Schema & Sync
 | Tool | Description |
@@ -276,7 +306,7 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 </details>
 
 <details>
-<summary><strong>Table Management (9 tools)</strong></summary>
+<summary><strong>Table Management (17 tools)</strong></summary>
 
 ### Metadata
 | Tool | Description |
@@ -285,20 +315,36 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 | `get_table` | Get table metadata by ID |
 | `get_table_metadata` | Get full query metadata including field IDs and types |
 | `get_table_fks` | Get foreign key relationships |
+| `get_table_related` | Find related tables via FK relationships |
+| `get_table_data` | Get a sample data preview from a table |
 | `get_field_id` | Look up a field ID by table ID + column name (returns MBQL ref) |
+
+### Card Virtual Tables
+| Tool | Description |
+|---|---|
+| `get_card_table_fks` | Get FK relationships for a card's virtual table |
+| `get_card_table_query_metadata` | Get query metadata for a card's virtual table |
 
 ### Management
 | Tool | Description |
 |---|---|
 | `update_table` | Update display name, description, or visibility |
+| `update_tables` | Bulk-update multiple tables with the same config |
+| `reorder_table_fields` | Change the display order of fields |
 | `sync_table_schema` | Trigger a schema sync for a specific table |
 | `rescan_table_field_values` | Rescan field values (updates filter dropdowns) |
 | `discard_table_field_values` | Discard cached field values |
 
+### CSV Upload (Metabase-managed tables)
+| Tool | Description |
+|---|---|
+| `append_csv_to_table` | Append new rows from CSV content |
+| `replace_table_csv` | Replace all table data with new CSV content |
+
 </details>
 
 <details>
-<summary><strong>Collections, Users & Search (11 tools)</strong></summary>
+<summary><strong>Collections, Users & Search (13 tools)</strong></summary>
 
 ### Collections
 | Tool | Description |
@@ -309,6 +355,7 @@ Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 | `update_collection` | Update name, description, color, or parent |
 | `delete_collection` | Delete a collection and its contents |
 | `get_collection_items` | List cards, dashboards, and sub-collections |
+| `move_to_collection` | Move a card or dashboard to a different collection |
 
 ### Users
 | Tool | Description |

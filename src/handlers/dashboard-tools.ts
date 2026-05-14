@@ -331,6 +331,182 @@ export class DashboardToolHandlers {
           required: ["dashboard_id"],
         },
       },
+      {
+        name: "get_dashboard",
+        description: "Get a specific dashboard by ID with full details",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "search_dashboards",
+        description: "Search dashboards by name or description",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search query string" },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "execute_dashboard_card",
+        description: "Execute a specific card on a dashboard and return results",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+            dashcard_id: { type: "number", description: "ID of the dashcard" },
+            card_id: { type: "number", description: "ID of the card" },
+            parameters: {
+              type: "array",
+              description: "Optional parameters to pass to the query",
+              items: { type: "object" },
+              default: [],
+            },
+          },
+          required: ["dashboard_id", "dashcard_id", "card_id"],
+        },
+      },
+      {
+        name: "favorite_dashboard",
+        description: "Mark a dashboard as a favourite",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "unfavorite_dashboard",
+        description: "Remove a dashboard from favourites",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
+      {
+        name: "add_text_block",
+        description: "Add a text or heading block to a dashboard",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+            text: { type: "string", description: "Text content for the block" },
+            visualization_settings: {
+              type: "object",
+              description: "Additional visualization settings (e.g. { \"text.align_horizontal\": \"left\" })",
+            },
+            row: { type: "number", description: "Row position (0-based)", default: 0 },
+            col: { type: "number", description: "Column position (0-based)", default: 0 },
+            size_x: { type: "number", description: "Width in grid units", default: 4 },
+            size_y: { type: "number", description: "Height in grid units", default: 2 },
+          },
+          required: ["dashboard_id", "text"],
+        },
+      },
+      {
+        name: "update_dashcard",
+        description: "Update a specific dashcard's position, size, or settings",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+            dashcard_id: { type: "number", description: "ID of the dashcard to update" },
+            row: { type: "number", description: "New row position" },
+            col: { type: "number", description: "New column position" },
+            size_x: { type: "number", description: "New width in grid units" },
+            size_y: { type: "number", description: "New height in grid units" },
+            visualization_settings: {
+              type: "object",
+              description: "Updated visualization settings",
+            },
+            parameter_mappings: {
+              type: "array",
+              description: "Updated parameter mappings",
+              items: { type: "object" },
+            },
+          },
+          required: ["dashboard_id", "dashcard_id"],
+        },
+      },
+      {
+        name: "update_dashboard_cards",
+        description: "Bulk-replace all cards on a dashboard. WARNING: replaces the entire card layout.",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+            cards: {
+              type: "array",
+              description: "Array of dashcard objects to replace the current layout",
+              items: { type: "object" },
+            },
+          },
+          required: ["dashboard_id", "cards"],
+        },
+      },
+      {
+        name: "save_dashboard",
+        description: "Save a complete dashboard object including nested cards and settings",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard to save" },
+            dashboard: {
+              type: "object",
+              description: "The full dashboard object to save",
+            },
+          },
+          required: ["dashboard_id", "dashboard"],
+        },
+      },
+      {
+        name: "save_dashboard_to_collection",
+        description: "Move a dashboard into a specific collection",
+        metadata: { mode: ["write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+            collection_id: {
+              type: ["number", "null"],
+              description: "ID of the target collection, or null for root collection",
+            },
+          },
+          required: ["dashboard_id", "collection_id"],
+        },
+      },
+      {
+        name: "get_dashboard_queries",
+        description: "Extract all card queries from a dashboard with their resolved database IDs and SQL. Useful for auditing what data a dashboard queries.",
+        metadata: { mode: ["read", "write", "all"], tags: ["dashboard"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            dashboard_id: { type: "number", description: "ID of the dashboard" },
+          },
+          required: ["dashboard_id"],
+        },
+      },
     ];
   }
 
@@ -408,6 +584,39 @@ export class DashboardToolHandlers {
         return await this.revertDashboard(args);
       case "get_dashboard_related":
         return await this.getDashboardRelated(args);
+
+      case "get_dashboard":
+        return await this.getDashboard(args);
+
+      case "search_dashboards":
+        return await this.searchDashboards(args);
+
+      case "execute_dashboard_card":
+        return await this.executeDashboardCard(args);
+
+      case "favorite_dashboard":
+        return await this.favoriteDashboard(args);
+
+      case "unfavorite_dashboard":
+        return await this.unfavoriteDashboard(args);
+
+      case "add_text_block":
+        return await this.addTextBlock(args);
+
+      case "update_dashcard":
+        return await this.updateDashcard(args);
+
+      case "update_dashboard_cards":
+        return await this.updateDashboardCards(args);
+
+      case "save_dashboard":
+        return await this.saveDashboard(args);
+
+      case "save_dashboard_to_collection":
+        return await this.saveDashboardToCollection(args);
+
+      case "get_dashboard_queries":
+        return await this.getDashboardQueries(args);
 
       default:
         throw new McpError(
@@ -819,5 +1028,157 @@ export class DashboardToolHandlers {
     if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
     const result = await this.client.apiCall("GET", `/api/dashboard/${dashboard_id}/related`);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getDashboard(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    const result = await this.client.apiCall("GET", `/api/dashboard/${dashboard_id}`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async searchDashboards(args: any): Promise<any> {
+    const { query } = args;
+    if (!query) throw new McpError(ErrorCode.InvalidParams, "query is required");
+    const result = await this.client.apiCall("GET", `/api/search?q=${encodeURIComponent(query)}&models=dashboard`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async executeDashboardCard(args: any): Promise<any> {
+    const { dashboard_id, dashcard_id, card_id, parameters = [] } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    if (!dashcard_id) throw new McpError(ErrorCode.InvalidParams, "dashcard_id is required");
+    if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
+    const result = await this.client.apiCall(
+      "POST",
+      `/api/dashboard/${dashboard_id}/dashcard/${dashcard_id}/card/${card_id}/query`,
+      { parameters }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async favoriteDashboard(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    const result = await this.client.apiCall("POST", `/api/dashboard/${dashboard_id}/favorite`);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async unfavoriteDashboard(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    await this.client.apiCall("DELETE", `/api/dashboard/${dashboard_id}/favorite`);
+    return { content: [{ type: "text", text: `Dashboard ${dashboard_id} removed from favourites.` }] };
+  }
+
+  private async addTextBlock(args: any): Promise<any> {
+    const {
+      dashboard_id,
+      text,
+      visualization_settings = {},
+      row = 0,
+      col = 0,
+      size_x = 4,
+      size_y = 2,
+    } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    if (!text) throw new McpError(ErrorCode.InvalidParams, "text is required");
+
+    const body = {
+      cardId: null,
+      row,
+      col,
+      size_x,
+      size_y,
+      series: [],
+      visualization_settings: {
+        virtual_card: {
+          name: null,
+          display: "text",
+          dataset_query: {},
+          visualization_settings: {},
+        },
+        text,
+        ...visualization_settings,
+      },
+    };
+
+    const result = await this.client.apiCall("POST", `/api/dashboard/${dashboard_id}/cards`, body);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async updateDashcard(args: any): Promise<any> {
+    const { dashboard_id, dashcard_id, ...updateFields } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    if (!dashcard_id) throw new McpError(ErrorCode.InvalidParams, "dashcard_id is required");
+
+    const dashboard = await this.client.getDashboard(dashboard_id);
+    const updatedCards = (dashboard.dashcards || []).map((card: any) =>
+      card.id === dashcard_id
+        ? this.toDashcardPayload(card, updateFields)
+        : this.toDashcardPayload(card)
+    );
+
+    const result = await this.client.apiCall(
+      "PUT",
+      `/api/dashboard/${dashboard_id}/cards`,
+      { cards: updatedCards, tabs: dashboard.tabs || [] }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async updateDashboardCards(args: any): Promise<any> {
+    const { dashboard_id, cards } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    if (!cards) throw new McpError(ErrorCode.InvalidParams, "cards is required");
+
+    const result = await this.client.apiCall(
+      "PUT",
+      `/api/dashboard/${dashboard_id}/cards`,
+      { cards }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async saveDashboard(args: any): Promise<any> {
+    const { dashboard_id, dashboard } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    if (!dashboard) throw new McpError(ErrorCode.InvalidParams, "dashboard is required");
+
+    const result = await this.client.apiCall("PUT", `/api/dashboard/${dashboard_id}`, dashboard);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async saveDashboardToCollection(args: any): Promise<any> {
+    const { dashboard_id, collection_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+    if (collection_id === undefined) throw new McpError(ErrorCode.InvalidParams, "collection_id is required");
+
+    const result = await this.client.apiCall(
+      "PUT",
+      `/api/dashboard/${dashboard_id}`,
+      { collection_id }
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async getDashboardQueries(args: any): Promise<any> {
+    const { dashboard_id } = args;
+    if (!dashboard_id) throw new McpError(ErrorCode.InvalidParams, "dashboard_id is required");
+
+    const dashboard = await this.client.apiCall("GET", `/api/dashboard/${dashboard_id}`);
+    const allCards = dashboard.ordered_cards || dashboard.dashcards || [];
+
+    const queries = allCards
+      .filter((dc: any) => dc.card != null)
+      .map((dc: any) => ({
+        dashcard_id: dc.id,
+        card_id: dc.card.id,
+        card_name: dc.card.name,
+        display: dc.card.display,
+        dataset_query: dc.card.dataset_query,
+      }));
+
+    return { content: [{ type: "text", text: JSON.stringify(queries, null, 2) }] };
   }
 }
