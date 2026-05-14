@@ -193,6 +193,57 @@ export class DatabaseToolHandlers {
           required: ["database_id"],
         },
       },
+      {
+        name: "get_database",
+        description: "Get detailed information about a specific database connection",
+        metadata: { mode: ["essential", "read", "write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            database_id: { type: "number", description: "ID of the database" },
+          },
+          required: ["database_id"],
+        },
+      },
+      {
+        name: "update_database",
+        description: "Update a database connection's configuration, credentials, or sync settings",
+        metadata: { mode: ["write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            database_id: { type: "number", description: "ID of the database to update" },
+            name: { type: "string", description: "New name for the database connection" },
+            engine: { type: "string", description: "Database engine (e.g., 'postgres', 'mysql')" },
+            details: { type: "object", description: "Connection details to update" },
+            schedules: { type: "object", description: "Sync schedules configuration" },
+            auto_run_queries: { type: "boolean", description: "Whether to auto-run queries" },
+            refingerprint: { type: "boolean", description: "Whether to re-fingerprint the database" },
+          },
+          required: ["database_id"],
+        },
+      },
+      {
+        name: "delete_database",
+        description: "Permanently remove a database connection from Metabase",
+        metadata: { mode: ["write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {
+            database_id: { type: "number", description: "ID of the database to delete" },
+          },
+          required: ["database_id"],
+        },
+      },
+      {
+        name: "add_sample_database",
+        description: "Add the built-in Metabase sample database (H2) with demo data for testing",
+        metadata: { mode: ["write", "all"], tags: ["database"] },
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ];
   }
 
@@ -230,6 +281,18 @@ export class DatabaseToolHandlers {
         return await this.listDatabaseSchemas(args);
       case "get_database_metadata":
         return await this.getDatabaseMetadataTool(args);
+
+      case "get_database":
+        return await this.getDatabase(args);
+
+      case "update_database":
+        return await this.updateDatabase(args);
+
+      case "delete_database":
+        return await this.deleteDatabase(args);
+
+      case "add_sample_database":
+        return await this.addSampleDatabase();
 
       default:
         throw new McpError(
@@ -463,5 +526,38 @@ export class DatabaseToolHandlers {
     if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
     const metadata = await this.client.apiCall("GET", `/api/database/${database_id}/metadata`);
     return { content: [{ type: "text", text: JSON.stringify(metadata, null, 2) }] };
+  }
+
+  private async getDatabase(args: any): Promise<any> {
+    const { database_id } = args;
+    if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
+    const database = await this.client.apiCall("GET", `/api/database/${database_id}`);
+    return { content: [{ type: "text", text: JSON.stringify(database, null, 2) }] };
+  }
+
+  private async updateDatabase(args: any): Promise<any> {
+    const { database_id, name, engine, details, schedules, auto_run_queries, refingerprint } = args;
+    if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
+    const body: Record<string, any> = {};
+    if (name !== undefined) body.name = name;
+    if (engine !== undefined) body.engine = engine;
+    if (details !== undefined) body.details = details;
+    if (schedules !== undefined) body.schedules = schedules;
+    if (auto_run_queries !== undefined) body.auto_run_queries = auto_run_queries;
+    if (refingerprint !== undefined) body.refingerprint = refingerprint;
+    const result = await this.client.apiCall("PUT", `/api/database/${database_id}`, body);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  private async deleteDatabase(args: any): Promise<any> {
+    const { database_id } = args;
+    if (!database_id) throw new McpError(ErrorCode.InvalidParams, "database_id is required");
+    await this.client.apiCall("DELETE", `/api/database/${database_id}`);
+    return { content: [{ type: "text", text: JSON.stringify({ message: `Database ${database_id} deleted successfully` }, null, 2) }] };
+  }
+
+  private async addSampleDatabase(): Promise<any> {
+    const result = await this.client.apiCall("POST", "/api/database/sample_database");
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 }
