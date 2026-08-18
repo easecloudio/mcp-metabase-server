@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/easecloudio-mcp-metabase-server-badge.png)](https://mseep.ai/app/easecloudio-mcp-metabase-server)
+
 # Metabase MCP Server
 
 [![npm version](https://img.shields.io/npm/v/@easecloudio/mcp-metabase-server)](https://www.npmjs.com/package/@easecloudio/mcp-metabase-server)
