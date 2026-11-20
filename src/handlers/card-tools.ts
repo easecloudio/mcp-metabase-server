@@ -5,6 +5,7 @@
 import { MetabaseClient } from "../client/metabase-client.js";
 import { ErrorCode, McpError } from "../types/errors.js";
 import { TaggedTool } from "../types/tool-metadata.js";
+import { needsParameterIds, normalizeCardParameters } from "../utils/parameters.js";
 
 // Default attributes to return when listing cards (excludes heavy fields like result_metadata)
 const DEFAULT_CARD_ATTRIBUTES = [
@@ -263,7 +264,18 @@ export class CardToolHandlers {
             parameters: {
               type: "array",
               description: "Optional query parameters",
-              items: { type: "object" },
+              items: {
+                type: "object",
+                properties: {
+                  id: {
+                    type: "string",
+                    description: "Parameter id (required by Metabase 0.61.19, 0.62.17, 0.63.14 and later). Taken from the card's matching parameter when omitted",
+                  },
+                  type: { type: "string", description: "Parameter type, e.g. category, date/single, number/=" },
+                  target: { type: "array", description: "Where the parameter applies, e.g. [\"dimension\", [\"field\", 45, null]]" },
+                  value: { description: "Parameter value" },
+                },
+              },
             },
           },
           required: ["card_id"],
@@ -357,7 +369,18 @@ export class CardToolHandlers {
             parameters: {
               type: "array",
               description: "Optional parameters for the query",
-              items: { type: "object" },
+              items: {
+                type: "object",
+                properties: {
+                  id: {
+                    type: "string",
+                    description: "Parameter id (required by Metabase 0.61.19, 0.62.17, 0.63.14 and later). Taken from the card's matching parameter when omitted",
+                  },
+                  type: { type: "string", description: "Parameter type, e.g. category, date/single, number/=" },
+                  target: { type: "array", description: "Where the parameter applies, e.g. [\"dimension\", [\"field\", 45, null]]" },
+                  value: { description: "Parameter value" },
+                },
+              },
             },
           },
           required: ["card_id"],
@@ -656,6 +679,24 @@ export class CardToolHandlers {
     return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
   }
 
+  /**
+   * Parameters for a card query request. Recent Metabase versions require an
+   * `id` on every parameter, so fill in missing ones, reusing the id of the
+   * card's matching parameter when the card can be read.
+   */
+  private async cardQueryParameters(card_id: number, parameters: any): Promise<any[]> {
+    let cardParameters: any[] = [];
+    if (needsParameterIds(parameters)) {
+      try {
+        const card = await this.client.apiCall("GET", `/api/card/${card_id}`);
+        cardParameters = Array.isArray(card?.parameters) ? card.parameters : [];
+      } catch {
+        // Fall back to generated ids if the card can't be read.
+      }
+    }
+    return normalizeCardParameters(parameters, cardParameters);
+  }
+
   private async exportCardResult(args: any): Promise<any> {
     const { card_id, format = "json", parameters = [] } = args;
     if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
@@ -665,7 +706,7 @@ export class CardToolHandlers {
     const result = await this.client.apiCall(
       "POST",
       `/api/card/${card_id}/query/${format}`,
-      { parameters }
+      { parameters: await this.cardQueryParameters(card_id, parameters) }
     );
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
@@ -731,7 +772,9 @@ export class CardToolHandlers {
   private async executePivotCardQuery(args: any): Promise<any> {
     const { card_id, parameters = [] } = args;
     if (!card_id) throw new McpError(ErrorCode.InvalidParams, "card_id is required");
-    const result = await this.client.apiCall("POST", `/api/card/${card_id}/query/pivot`, { parameters });
+    const result = await this.client.apiCall("POST", `/api/card/pivot/${card_id}/query`, {
+      parameters: await this.cardQueryParameters(card_id, parameters),
+    });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
